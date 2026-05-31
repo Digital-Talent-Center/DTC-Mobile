@@ -1,20 +1,46 @@
 import 'package:flutter/material.dart';
+import '../screens/dashboard_screen.dart';
+import '../screens/notification_screen.dart';
 
 class BottomNavbar extends StatelessWidget {
   final int currentIndex;
-  final ValueChanged<int> onTap;
 
   const BottomNavbar({
     Key? key,
     required this.currentIndex,
-    required this.onTap,
   }) : super(key: key);
+
+  void _onTap(BuildContext context, int index) {
+    if (index == currentIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          (route) => false,
+        );
+        break;
+      case 1:
+        // TODO: Navigator ke TimelineScreen
+        break;
+      case 2:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const NotificationScreen()),
+        );
+        break;
+      case 3:
+        // TODO: Navigator ke ProfileScreen
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
       currentIndex: currentIndex,
-      onTap: onTap,
+      onTap: (index) => _onTap(context, index),
       type: BottomNavigationBarType.fixed,
       backgroundColor: Colors.white,
       selectedItemColor: const Color(0xFFEA8000),

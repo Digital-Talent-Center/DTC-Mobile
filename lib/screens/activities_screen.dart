@@ -89,7 +89,6 @@ class _ActivitiesScreenState extends State<ActivitiesScreen> {
       ),
       bottomNavigationBar: BottomNavbar(
         currentIndex: _selectedNavIndex,
-        onTap: (i) => setState(() => _selectedNavIndex = i),
       ),
     );
   }
