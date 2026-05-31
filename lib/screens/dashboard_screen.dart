@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/bottom_navbar.dart';
 import 'login_screen.dart';
+import 'activities_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -151,7 +152,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: f['icon'] as IconData,
                     label: f['label'] as String,
                     color: f['color'] as Color,
-                    onTap: () {},
+                    onTap: () {
+                      if (f['label'] == 'Activities') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ActivitiesScreen()),
+                        );
+                      }
+                    },
                   );
                 }).toList(),
               ),
