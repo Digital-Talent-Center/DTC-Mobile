@@ -3,6 +3,7 @@ import '../widgets/bottom_navbar.dart';
 import 'login_screen.dart';
 import 'activities_screen.dart';
 import 'co_guide_screen.dart';
+import 'co_library_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -163,6 +164,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const CoGuideScreen()),
+                        );
+                      } else if (f['label'] == 'Co-Library') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CoLibraryScreen()),
                         );
                       }
                     },
