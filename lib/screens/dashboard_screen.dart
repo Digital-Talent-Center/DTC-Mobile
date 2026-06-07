@@ -6,6 +6,7 @@ import 'co_guide_screen.dart';
 import 'co_library_screen.dart';
 import 'my_achievements_screen.dart';
 import 'submit_achievement_screen.dart';
+import 'premium_post_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -181,6 +182,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const SubmitAchievementScreen()),
+                        );
+                      } else if (f['label'] == 'Premium Post') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const PremiumPostScreen()),
                         );
                       }
                     },
