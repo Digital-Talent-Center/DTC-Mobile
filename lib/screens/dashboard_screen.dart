@@ -4,6 +4,8 @@ import 'login_screen.dart';
 import 'activities_screen.dart';
 import 'co_guide_screen.dart';
 import 'co_library_screen.dart';
+import 'my_achievements_screen.dart';
+import 'submit_achievement_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -18,10 +20,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _visiblePremiumHighlightCount = 3;
 
   final List<Map<String, dynamic>> _features = [
-    {'icon': Icons.calendar_today, 'label': 'Activities', 'color': Color(0xFFEA8000)},
-    {'icon': Icons.assignment_outlined, 'label': 'My Tasks', 'color': Color(0xFF2D7BF4)},
+    {'icon': Icons.event_note_outlined, 'label': 'Activities', 'color': Color(0xFFEA8000)},
+    {'icon': Icons.emoji_events_outlined, 'label': 'My Achievement', 'color': Color(0xFFF5B800)},
     {'icon': Icons.military_tech_outlined, 'label': 'Submit Achievement', 'color': Color(0xFF8B5CF6)},
-    {'icon': Icons.menu_book_outlined, 'label': 'Co-Library', 'color': Color(0xFFEA8000)},
+    {'icon': Icons.collections_bookmark_outlined, 'label': 'Co-Library', 'color': Color(0xFFEA8000)},
     {'icon': Icons.explore_outlined, 'label': 'Co-Guide', 'color': Color(0xFFE91E63)},
     {'icon': Icons.star_border, 'label': 'Premium Post', 'color': Color(0xFF8B5CF6)},
   ];
@@ -169,6 +171,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const CoLibraryScreen()),
+                        );
+                      } else if (f['label'] == 'My Achievement') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const MyAchievementsScreen()),
+                        );
+                      } else if (f['label'] == 'Submit Achievement') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SubmitAchievementScreen()),
                         );
                       }
                     },
