@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/bottom_navbar.dart';
 import 'login_screen.dart';
 import 'activities_screen.dart';
+import 'co_guide_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -157,6 +158,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const ActivitiesScreen()),
+                        );
+                      } else if (f['label'] == 'Co-Guide') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CoGuideScreen()),
                         );
                       }
                     },
