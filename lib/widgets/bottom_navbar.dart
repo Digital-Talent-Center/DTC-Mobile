@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/notification_screen.dart';
+import '../screens/profile_screen.dart';
 
 class BottomNavbar extends StatelessWidget {
   final int currentIndex;
@@ -31,7 +32,10 @@ class BottomNavbar extends StatelessWidget {
         );
         break;
       case 3:
-        // TODO: Navigator ke ProfileScreen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+        );
         break;
     }
   }
