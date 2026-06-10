@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/notification_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/timeline_screen.dart';
 
 class BottomNavbar extends StatelessWidget {
   final int currentIndex;
@@ -23,7 +24,10 @@ class BottomNavbar extends StatelessWidget {
         );
         break;
       case 1:
-        // TODO: Navigator ke TimelineScreen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TimelineScreen()),
+        );
         break;
       case 2:
         Navigator.push(
