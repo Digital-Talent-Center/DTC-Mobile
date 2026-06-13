@@ -70,9 +70,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         faculty: _facultyCtrl.text.trim(),
         studyProgram: _studyProgramCtrl.text.trim(),
       );
-      // Inisialisasi FCM dan kirim token ke backend setelah register berhasil.
-      await FcmService.instance.initialize();
-      await FcmService.instance.registerToken();
+
+      // FCM: inisialisasi & kirim token ke backend.
+      // Dibungkus try-catch terpisah agar error FCM tidak gagalkan register.
+      try {
+        await FcmService.instance.initialize();
+        await FcmService.instance.registerToken();
+      } catch (fcmErr) {
+        debugPrint('[Register] FCM error (non-fatal): $fcmErr');
+      }
+
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,

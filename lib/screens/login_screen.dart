@@ -44,9 +44,16 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await AuthService.instance.login(email: email, password: password);
-      // Inisialisasi FCM dan kirim token ke backend setelah login berhasil.
-      await FcmService.instance.initialize();
-      await FcmService.instance.registerToken();
+
+      // FCM: inisialisasi & kirim token ke backend.
+      // Dibungkus try-catch terpisah agar error FCM tidak gagalkan login.
+      try {
+        await FcmService.instance.initialize();
+        await FcmService.instance.registerToken();
+      } catch (fcmErr) {
+        debugPrint('[Login] FCM error (non-fatal): $fcmErr');
+      }
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,

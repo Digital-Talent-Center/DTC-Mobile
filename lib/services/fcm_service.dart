@@ -61,10 +61,14 @@ class FcmService {
   /// Register/kirim ulang FCM token ke backend. Dipanggil setelah login/register.
   Future<void> registerToken() async {
     try {
+      debugPrint('[FCM] registerToken: getting token...');
       final token = await _messaging.getToken();
       if (token != null && token.isNotEmpty) {
         _currentToken = token;
+        debugPrint('[FCM] registerToken: got token, sending to backend...');
         await sendTokenToBackend(token);
+      } else {
+        debugPrint('[FCM] registerToken: token is null or empty!');
       }
     } catch (e) {
       debugPrint('[FCM] registerToken error: $e');
@@ -301,16 +305,22 @@ class FcmService {
   // ---------------------------------------------------------------------------
 
   Future<void> sendTokenToBackend(String token) async {
-    if (!Session.instance.isLoggedIn) return;
+    if (!Session.instance.isLoggedIn) {
+      debugPrint('[FCM] sendTokenToBackend skipped: not logged in');
+      return;
+    }
     try {
       final platform = Platform.isIOS ? 'ios' : 'android';
+      debugPrint('[FCM] Sending token to backend... (${token.substring(0, 20)}...)');
       await ApiClient.instance.post('/fcm-token', body: {
         'token': token,
         'platform': platform,
       });
-      debugPrint('[FCM] Token sent to backend');
+      debugPrint('[FCM] ✅ Token sent to backend successfully');
+    } on ApiException catch (e) {
+      debugPrint('[FCM] ❌ sendTokenToBackend API error: ${e.statusCode} - ${e.message}');
     } catch (e) {
-      debugPrint('[FCM] sendTokenToBackend error: $e');
+      debugPrint('[FCM] ❌ sendTokenToBackend error: $e');
     }
   }
 
