@@ -70,8 +70,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         faculty: _facultyCtrl.text.trim(),
         studyProgram: _studyProgramCtrl.text.trim(),
       );
-      // Daftarkan FCM token setelah akun dibuat (push notification).
-      FcmService.instance.registerToken();
+      // Inisialisasi FCM dan kirim token ke backend setelah register berhasil.
+      await FcmService.instance.initialize();
+      await FcmService.instance.registerToken();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
