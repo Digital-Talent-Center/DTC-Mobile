@@ -6,9 +6,6 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/fcm_service.dart';
 import 'dashboard_screen.dart';
-import '../services/api_client.dart';
-import '../services/auth_service.dart';
-import 'dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -73,67 +70,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         faculty: _facultyCtrl.text.trim(),
         studyProgram: _studyProgramCtrl.text.trim(),
       );
+      // Daftarkan FCM token setelah akun dibuat (push notification).
       FcmService.instance.registerToken();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        (route) => false,
-      );
-    } on ApiException catch (e) {
-      _snack(e.firstError);
-    } catch (_) {
-      _snack('Gagal terhubung ke server. Periksa koneksi & alamat server.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-  bool _loading = false;
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _nimCtrl.dispose();
-    _facultyCtrl.dispose();
-    _studyProgramCtrl.dispose();
-    _passwordCtrl.dispose();
-    _confirmCtrl.dispose();
-    super.dispose();
-  }
-
-  void _snack(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _register() async {
-    if (_nameCtrl.text.trim().isEmpty ||
-        _emailCtrl.text.trim().isEmpty ||
-        _passwordCtrl.text.isEmpty) {
-      _snack('Nama, email, dan password wajib diisi');
-      return;
-    }
-    if (_passwordCtrl.text != _confirmCtrl.text) {
-      _snack('Password dan konfirmasi tidak cocok');
-      return;
-    }
-    if (!_agreedToTerms) {
-      _snack('Harap setujui Terms of Service & Privacy Policy');
-      return;
-    }
-
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance.register(
-        name: _nameCtrl.text.trim(),
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text,
-        passwordConfirmation: _confirmCtrl.text,
-        nim: _nimCtrl.text.trim(),
-        faculty: _facultyCtrl.text.trim(),
-        studyProgram: _studyProgramCtrl.text.trim(),
-      );
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
