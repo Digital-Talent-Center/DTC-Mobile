@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/primary_button.dart';
+import '../services/api_client.dart';
+import '../services/auth_service.dart';
 import 'register_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -13,7 +15,47 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
   bool _rememberMe = false;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _login() async {
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    if (email.isEmpty || password.isEmpty) {
+      _snack('Email dan password wajib diisi');
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      await AuthService.instance.login(email: email, password: password);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      );
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal terhubung ke server. Periksa koneksi & alamat server.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,12 +79,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Column(
                     children: [
-                      const CustomTextField(
+                      CustomTextField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
                         label: "EMAIL ADDRESS",
                         hintText: "name@university.ac.id",
                         prefixIcon: Icons.email_outlined,
                       ),
-                      const CustomTextField(
+                      CustomTextField(
+                        controller: _passwordCtrl,
                         label: "PASSWORD",
                         hintText: "Enter your password",
                         prefixIcon: Icons.lock_outline,
@@ -67,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           GestureDetector(
-                            onTap: () {}, // Action forgot password
+                            onTap: () => _snack('Hubungi admin untuk reset password.'),
                             child: const Text(
                               "Forgot password?",
                               style: TextStyle(color: Color(0xFFEA8000), fontWeight: FontWeight.bold, fontSize: 14),
@@ -78,12 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 30),
                       PrimaryButton(
                         text: "Sign In",
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (context) => const DashboardScreen()),
-                          );
-                        },
+                        isLoading: _loading,
+                        onPressed: _login,
                       ),
                     ],
                   ),

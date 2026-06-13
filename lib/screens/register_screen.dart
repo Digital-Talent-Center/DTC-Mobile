@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/primary_button.dart';
+import '../services/api_client.dart';
+import '../services/auth_service.dart';
+import 'dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -11,7 +14,75 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _nimCtrl = TextEditingController();
+  final _facultyCtrl = TextEditingController();
+  final _studyProgramCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+
   bool _agreedToTerms = false;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _nimCtrl.dispose();
+    _facultyCtrl.dispose();
+    _studyProgramCtrl.dispose();
+    _passwordCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _register() async {
+    if (_nameCtrl.text.trim().isEmpty ||
+        _emailCtrl.text.trim().isEmpty ||
+        _passwordCtrl.text.isEmpty) {
+      _snack('Nama, email, dan password wajib diisi');
+      return;
+    }
+    if (_passwordCtrl.text != _confirmCtrl.text) {
+      _snack('Password dan konfirmasi tidak cocok');
+      return;
+    }
+    if (!_agreedToTerms) {
+      _snack('Harap setujui Terms of Service & Privacy Policy');
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      await AuthService.instance.register(
+        name: _nameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        password: _passwordCtrl.text,
+        passwordConfirmation: _confirmCtrl.text,
+        nim: _nimCtrl.text.trim(),
+        faculty: _facultyCtrl.text.trim(),
+        studyProgram: _studyProgramCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        (route) => false,
+      );
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal terhubung ke server. Periksa koneksi & alamat server.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,13 +106,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   child: Column(
                     children: [
-                      const CustomTextField(label: "FULL NAME", hintText: "Enter your full name", prefixIcon: Icons.person_outline),
-                      const CustomTextField(label: "EMAIL ADDRESS", hintText: "name@university.ac.id", prefixIcon: Icons.email_outlined),
-                      const CustomTextField(label: "NIM (STUDENT ID)", hintText: "Enter your student ID", prefixIcon: Icons.badge_outlined),
-                      const CustomTextField(label: "FACULTY", hintText: "e.g. Informatika", prefixIcon: Icons.account_balance_outlined),
-                      const CustomTextField(label: "STUDY PROGRAM", hintText: "e.g. S1 Informatika", prefixIcon: Icons.school_outlined),
-                      const CustomTextField(label: "PASSWORD", hintText: "Enter your password", prefixIcon: Icons.lock_outline, isPassword: true),
-                      const CustomTextField(label: "CONFIRM PASSWORD", hintText: "Repeat your password", prefixIcon: Icons.autorenew, isPassword: true),
+                      CustomTextField(controller: _nameCtrl, label: "FULL NAME", hintText: "Enter your full name", prefixIcon: Icons.person_outline),
+                      CustomTextField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress, label: "EMAIL ADDRESS", hintText: "name@university.ac.id", prefixIcon: Icons.email_outlined),
+                      CustomTextField(controller: _nimCtrl, keyboardType: TextInputType.number, label: "NIM (STUDENT ID)", hintText: "Enter your student ID", prefixIcon: Icons.badge_outlined),
+                      CustomTextField(controller: _facultyCtrl, label: "FACULTY", hintText: "e.g. Informatika", prefixIcon: Icons.account_balance_outlined),
+                      CustomTextField(controller: _studyProgramCtrl, label: "STUDY PROGRAM", hintText: "e.g. S1 Informatika", prefixIcon: Icons.school_outlined),
+                      CustomTextField(controller: _passwordCtrl, label: "PASSWORD", hintText: "Min. 8 characters", prefixIcon: Icons.lock_outline, isPassword: true),
+                      CustomTextField(controller: _confirmCtrl, label: "CONFIRM PASSWORD", hintText: "Repeat your password", prefixIcon: Icons.autorenew, isPassword: true),
 
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                       ),
                       const SizedBox(height: 30),
-                      PrimaryButton(text: "Create Account", onPressed: () {}),
+                      PrimaryButton(text: "Create Account", isLoading: _loading, onPressed: _register),
                     ],
                   ),
                 ),
