@@ -38,6 +38,21 @@ dependencies:
   # File picker untuk unggah bukti prestasi (PDF/Gambar)
   file_picker: ^8.1.4
 
+  # HTTP client untuk konsumsi REST API DTC Platform (Laravel + Sanctum)
+  http: ^1.2.2
+
+  # Penyimpanan token Sanctum & data sesi sederhana di device
+  shared_preferences: ^2.3.2
+
+  # Format tanggal/waktu (locale id_ID) untuk Activities, Achievements, dll.
+  intl: ^0.20.2
+
+  # Membuka file dokumen/guide (PDF) & link di browser perangkat
+  url_launcher: ^6.3.1
+
+  # Pemutar video untuk media post di Timeline
+  video_player: ^2.9.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

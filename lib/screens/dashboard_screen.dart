@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../widgets/bottom_navbar.dart';
+import '../models/premium_highlight.dart';
+import '../services/session.dart';
+import '../services/auth_service.dart';
+import '../services/premium_service.dart';
 import 'login_screen.dart';
 import 'activities_screen.dart';
 import 'co_guide_screen.dart';
@@ -16,9 +20,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 0;
-  int _visiblePremiumPostCount = 3;
-  int _visiblePremiumHighlightCount = 3;
+  final int _selectedIndex = 0;
+
+  bool _loadingHighlights = true;
+  String? _highlightsError;
+  List<PremiumHighlight> _highlights = [];
 
   final List<Map<String, dynamic>> _features = [
     {'icon': Icons.event_note_outlined, 'label': 'Activities', 'color': Color(0xFFEA8000)},
@@ -29,242 +35,204 @@ class _DashboardScreenState extends State<DashboardScreen> {
     {'icon': Icons.star_border, 'label': 'Premium Post', 'color': Color(0xFF8B5CF6)},
   ];
 
-  final List<Map<String, String>> _premiumPosts = [
-    {
-      'title': 'Course material updated',
-      'description': 'Advanced Statistics - Chapter 4 was just updated with new practice quizzes.',
-      'timeAgo': '2 HOURS AGO',
-    },
-    {
-      'title': 'New premium article',
-      'description': 'Exclusive case study on machine learning applications in finance.',
-      'timeAgo': '5 HOURS AGO',
-    },
-    {
-      'title': 'Webinar reminder',
-      'description': 'Join our upcoming live session on data visualization tomorrow at 7PM.',
-      'timeAgo': '1 DAY AGO',
-    },
-    {
-      'title': 'New tutorial released',
-      'description': 'Step-by-step guide on Flutter state management with Provider package.',
-      'timeAgo': '2 DAYS AGO',
-    },
-    {
-      'title': 'Mentor session available',
-      'description': 'Book a 1-on-1 mentor session with our experienced industry experts.',
-      'timeAgo': '3 DAYS AGO',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadHighlights();
+  }
 
-  final List<Map<String, String>> _premiumHighlights = [
-    {
-      'title': 'Course material updated',
-      'description': 'Advanced Statistics - Chapter 4 was just updated with new practice quizzes.',
-      'timeAgo': '2 HOURS AGO',
-    },
-    {
-      'title': 'Top student of the week',
-      'description': 'Congratulations to Sarah for achieving the highest score this week.',
-      'timeAgo': '6 HOURS AGO',
-    },
-    {
-      'title': 'Featured project showcase',
-      'description': 'Check out the trending student project on AI-based recommendation systems.',
-      'timeAgo': '12 HOURS AGO',
-    },
-    {
-      'title': 'New scholarship opportunity',
-      'description': 'Applications are now open for the Prodigi Excellence Scholarship 2026.',
-      'timeAgo': '1 DAY AGO',
-    },
-    {
-      'title': 'Community event recap',
-      'description': 'Highlights from the recent Prodigi Hackathon held last weekend.',
-      'timeAgo': '2 DAYS AGO',
-    },
-  ];
+  Future<void> _loadHighlights() async {
+    setState(() {
+      _loadingHighlights = true;
+      _highlightsError = null;
+    });
+    try {
+      final data = await PremiumService.instance.highlights();
+      if (!mounted) return;
+      setState(() {
+        _highlights = data;
+        _loadingHighlights = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _highlightsError = 'Gagal memuat Premium Highlights.';
+        _loadingHighlights = false;
+      });
+    }
+  }
 
-  void _logout() {
-    Navigator.pushReplacement(
+  Future<void> _logout() async {
+    await AuthService.instance.logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
     );
   }
 
-  void _showMorePosts() {
-    setState(() {
-      _visiblePremiumPostCount = (_visiblePremiumPostCount + 3).clamp(0, _premiumPosts.length);
-    });
-  }
-
-  void _showMoreHighlights() {
-    setState(() {
-      _visiblePremiumHighlightCount = (_visiblePremiumHighlightCount + 3).clamp(0, _premiumHighlights.length);
-    });
+  void _openFeature(String label) {
+    final routes = <String, WidgetBuilder>{
+      'Activities': (_) => const ActivitiesScreen(),
+      'Co-Guide': (_) => const CoGuideScreen(),
+      'Co-Library': (_) => const CoLibraryScreen(),
+      'My Achievement': (_) => const MyAchievementsScreen(),
+      'Submit Achievement': (_) => const SubmitAchievementScreen(),
+      'Premium Post': (_) => const PremiumPostScreen(),
+    };
+    final builder = routes[label];
+    if (builder != null) {
+      Navigator.push(context, MaterialPageRoute(builder: builder))
+          .then((_) => _loadHighlights());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final visiblePosts = _premiumPosts.take(_visiblePremiumPostCount).toList();
-    final hasMorePosts = _visiblePremiumPostCount < _premiumPosts.length;
-    final visibleHighlights = _premiumHighlights.take(_visiblePremiumHighlightCount).toList();
-    final hasMoreHighlights = _visiblePremiumHighlightCount < _premiumHighlights.length;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Image.asset('Assets/images/logo-horizontal.png', height: 40),
-                  IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.red),
-                    onPressed: _logout,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Hi, Arrijal Julfa Arrasyid!',
-                style: TextStyle(
-                  color: Color(0xFFEA8000),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Fitur Aplikasi',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.95,
-                children: _features.map((f) {
-                  return _FeatureCard(
-                    icon: f['icon'] as IconData,
-                    label: f['label'] as String,
-                    color: f['color'] as Color,
-                    onTap: () {
-                      if (f['label'] == 'Activities') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ActivitiesScreen()),
-                        );
-                      } else if (f['label'] == 'Co-Guide') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CoGuideScreen()),
-                        );
-                      } else if (f['label'] == 'Co-Library') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CoLibraryScreen()),
-                        );
-                      } else if (f['label'] == 'My Achievement') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const MyAchievementsScreen()),
-                        );
-                      } else if (f['label'] == 'Submit Achievement') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SubmitAchievementScreen()),
-                        );
-                      } else if (f['label'] == 'Premium Post') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const PremiumPostScreen()),
-                        );
-                      }
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'PREMIUM POST',
-                style: TextStyle(
-                  color: Colors.black45,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...visiblePosts.map((post) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _PostCard(
-                  title: post['title']!,
-                  description: post['description']!,
-                  timeAgo: post['timeAgo']!,
-                ),
-              )),
-              if (hasMorePosts)
-                Center(
-                  child: TextButton(
-                    onPressed: _showMorePosts,
-                    child: const Text(
-                      'Show More',
-                      style: TextStyle(
-                        color: Color(0xFFEA8000),
-                        fontWeight: FontWeight.bold,
-                      ),
+        child: RefreshIndicator(
+          color: const Color(0xFFEA8000),
+          onRefresh: _loadHighlights,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Image.asset('Assets/images/logo-horizontal.png', height: 40),
+                    IconButton(
+                      icon: const Icon(Icons.logout, color: Colors.red),
+                      onPressed: _logout,
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Hi, ${Session.instance.user?.name ?? 'Mahasiswa'}!',
+                  style: const TextStyle(
+                    color: Color(0xFFEA8000),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
                 ),
-              const SizedBox(height: 16),
-              const Text(
-                'PREMIUM HIGHLIGHT',
-                style: TextStyle(
-                  color: Colors.black45,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1,
+                const SizedBox(height: 24),
+                const Text(
+                  'Fitur Aplikasi',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-              ),
-              const SizedBox(height: 12),
-              ...visibleHighlights.map((h) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _PostCard(
-                  title: h['title']!,
-                  description: h['description']!,
-                  timeAgo: h['timeAgo']!,
+                const SizedBox(height: 12),
+                GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.95,
+                  children: _features.map((f) {
+                    return _FeatureCard(
+                      icon: f['icon'] as IconData,
+                      label: f['label'] as String,
+                      color: f['color'] as Color,
+                      onTap: () => _openFeature(f['label'] as String),
+                    );
+                  }).toList(),
                 ),
-              )),
-              if (hasMoreHighlights)
-                Center(
-                  child: TextButton(
-                    onPressed: _showMoreHighlights,
-                    child: const Text(
-                      'Show More',
-                      style: TextStyle(
-                        color: Color(0xFFEA8000),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                const SizedBox(height: 24),
+                const Text(
+                  'PREMIUM HIGHLIGHTS',
+                  style: TextStyle(
+                    color: Colors.black45,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    letterSpacing: 1,
                   ),
                 ),
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 12),
+                _buildHighlights(),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavbar(
-        currentIndex: _selectedIndex,
-      ),
+      bottomNavigationBar: BottomNavbar(currentIndex: _selectedIndex),
+    );
+  }
+
+  Widget _buildHighlights() {
+    if (_loadingHighlights) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator(color: Color(0xFFEA8000))),
+      );
+    }
+    if (_highlightsError != null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off, color: Colors.black38),
+            const SizedBox(width: 12),
+            Expanded(child: Text(_highlightsError!)),
+            TextButton(onPressed: _loadHighlights, child: const Text('Coba lagi')),
+          ],
+        ),
+      );
+    }
+    if (_highlights.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.star_border, size: 40, color: Color(0xFFF5B800)),
+            const SizedBox(height: 10),
+            const Text(
+              'Belum ada Premium Post yang tersedia.',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () => _openFeature('Premium Post'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF5B800),
+                foregroundColor: Colors.black87,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+              ),
+              child: const Text('Buat Premium Post',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: _highlights
+          .map((h) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _HighlightCard(highlight: h),
+              ))
+          .toList(),
     );
   }
 }
@@ -299,7 +267,7 @@ class _FeatureCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 24),
@@ -322,69 +290,134 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-class _PostCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final String timeAgo;
+class _HighlightCard extends StatelessWidget {
+  final PremiumHighlight highlight;
 
-  const _PostCard({
-    required this.title,
-    required this.description,
-    required this.timeAgo,
-  });
+  const _HighlightCard({required this.highlight});
+
+  void _showDetail(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.star, color: Color(0xFFF5B800), size: 20),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Premium Post')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (highlight.imageUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  highlight.imageUrl!,
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Text('${highlight.userName} • ${highlight.timeAgo}',
+                style: const TextStyle(fontSize: 12, color: Colors.black45)),
+            const SizedBox(height: 8),
+            Text(highlight.postTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            if (highlight.postDescription.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(highlight.postDescription,
+                  style: const TextStyle(color: Colors.black54)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEA8000).withOpacity(0.15),
+    return InkWell(
+      onTap: () => _showDetail(context),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
               borderRadius: BorderRadius.circular(8),
+              child: highlight.imageUrl != null
+                  ? Image.network(
+                      highlight.imageUrl!,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _placeholderIcon(),
+                    )
+                  : _placeholderIcon(),
             ),
-            child: const Icon(Icons.description_outlined, color: Color(0xFFEA8000), size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: const TextStyle(color: Colors.black54, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  timeAgo,
-                  style: const TextStyle(
-                    color: Colors.black38,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.star, size: 14, color: Color(0xFFF5B800)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          highlight.userName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                      Text(highlight.timeAgo,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.black38)),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    highlight.postTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _placeholderIcon() {
+    return Container(
+      width: 56,
+      height: 56,
+      color: const Color(0xFFFFF3E0),
+      child: const Icon(Icons.image_outlined, color: Color(0xFFEA8000)),
     );
   }
 }

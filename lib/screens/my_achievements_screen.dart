@@ -1,24 +1,9 @@
 import 'package:flutter/material.dart';
+import '../models/achievement.dart';
+import '../services/achievement_service.dart';
+import '../services/api_client.dart';
 import '../widgets/bottom_navbar.dart';
 import 'submit_achievement_screen.dart';
-
-enum AchievementStatus { pending, rejected }
-
-class Achievement {
-  String title;
-  String description;
-  String category;
-  String date;
-  AchievementStatus status;
-
-  Achievement({
-    required this.title,
-    required this.description,
-    required this.category,
-    required this.date,
-    required this.status,
-  });
-}
 
 class MyAchievementsScreen extends StatefulWidget {
   const MyAchievementsScreen({Key? key}) : super(key: key);
@@ -29,38 +14,74 @@ class MyAchievementsScreen extends StatefulWidget {
 
 class _MyAchievementsScreenState extends State<MyAchievementsScreen> {
   final int _selectedNavIndex = 0;
-  int _selectedTab = 0; // 0 = Need Approval, 1 = Rejected
 
-  final List<Achievement> _achievements = [
-    Achievement(
-      title: 'Juara makan kerupuk',
-      description: 'dddd',
-      category: 'Kompetisi Ilmiah',
-      date: '-',
-      status: AchievementStatus.pending,
-    ),
-  ];
+  /// 0 = Collection (approved), 1 = Need Approval (pending), 2 = Rejected
+  int _selectedTab = 0;
+
+  bool _loading = true;
+  String? _error;
+  List<Achievement> _all = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await AchievementService.instance.list();
+      if (!mounted) return;
+      setState(() {
+        _all = data;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.firstError;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Gagal memuat prestasi. Periksa koneksi server.';
+        _loading = false;
+      });
+    }
+  }
 
   List<Achievement> get _filtered {
-    final status =
-        _selectedTab == 0 ? AchievementStatus.pending : AchievementStatus.rejected;
-    return _achievements.where((a) => a.status == status).toList();
+    switch (_selectedTab) {
+      case 0:
+        return _all.where((a) => a.isApproved).toList();
+      case 1:
+        return _all.where((a) => a.isPending).toList();
+      case 2:
+        return _all.where((a) => a.isRejected).toList();
+      default:
+        return _all;
+    }
   }
 
   Future<void> _openSubmitScreen() async {
-    final result = await Navigator.push<Achievement>(
+    final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const SubmitAchievementScreen()),
     );
-    if (result != null) {
-      setState(() => _achievements.add(result));
+    if (created == true) {
+      // Prestasi baru selalu berstatus pending → arahkan ke tab Need Approval.
+      setState(() => _selectedTab = 1);
+      _load();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _filtered;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBF1E8),
       appBar: AppBar(
@@ -79,71 +100,103 @@ class _MyAchievementsScreenState extends State<MyAchievementsScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        children: [
-          // Submit Achievement button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _openSubmitScreen,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF5B800),
-                foregroundColor: Colors.black87,
-                elevation: 2,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
+      body: RefreshIndicator(
+        color: const Color(0xFFEA8000),
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _openSubmitScreen,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF5B800),
+                  foregroundColor: Colors.black87,
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                icon: const Icon(Icons.add, size: 24),
+                label: const Text(
+                  'Submit Achievement',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                 ),
               ),
-              icon: const Icon(Icons.add, size: 24),
-              label: const Text(
-                'Submit Achievement',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+            const SizedBox(height: 24),
+            // Tabs (3): Collection / Need Approval / Rejected
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _tab('Achievement Collection', 0),
+                  const SizedBox(width: 12),
+                  _tab('Need Approval', 1),
+                  const SizedBox(width: 12),
+                  _tab('Rejected', 2),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 28),
-          const Center(
-            child: Text(
-              'Achievement Collection',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Tabs
-          Row(
-            children: [
-              _tab('Need Approval', 0),
-              const SizedBox(width: 16),
-              _tab('Rejected', 1),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 40),
-              child: Center(
-                child: Text(
-                  'Belum ada achievement',
-                  style: TextStyle(color: Colors.black45),
-                ),
-              ),
-            )
-          else
-            ...items.map((a) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _AchievementCard(achievement: a),
-                )),
-        ],
+            const SizedBox(height: 20),
+            _buildBody(),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavbar(
         currentIndex: _selectedNavIndex,
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 60),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFEA8000)),
+        ),
+      );
+    }
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 40),
+        child: Center(
+          child: Column(
+            children: [
+              const Icon(Icons.cloud_off, size: 48, color: Colors.black26),
+              const SizedBox(height: 12),
+              Text(_error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.black54)),
+              const SizedBox(height: 12),
+              TextButton(onPressed: _load, child: const Text('Coba lagi')),
+            ],
+          ),
+        ),
+      );
+    }
+    final items = _filtered;
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: Center(
+          child: Text(
+            'Belum ada prestasi pada kategori ini.',
+            style: TextStyle(color: Colors.black45),
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: items
+          .map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _AchievementCard(achievement: a),
+              ))
+          .toList(),
     );
   }
 
@@ -153,12 +206,12 @@ class _MyAchievementsScreenState extends State<MyAchievementsScreen> {
       onTap: () => setState(() => _selectedTab = index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFF5B800) : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
           border: Border.all(
-            color: selected ? Colors.black87 : Colors.transparent,
+            color: selected ? Colors.black87 : Colors.black26,
             width: 1.2,
           ),
         ),
@@ -166,7 +219,7 @@ class _MyAchievementsScreenState extends State<MyAchievementsScreen> {
           label,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 15,
             color: selected ? Colors.black87 : Colors.black54,
           ),
         ),
@@ -195,7 +248,6 @@ class _AchievementCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon + category badge
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -249,11 +301,28 @@ class _AchievementCard extends StatelessWidget {
                   size: 16, color: Colors.black45),
               const SizedBox(width: 8),
               Text(
-                achievement.date,
+                achievement.dateRangeLabel,
                 style: const TextStyle(fontSize: 14, color: Colors.black54),
               ),
             ],
           ),
+          if (achievement.linkSertifikat != null &&
+              achievement.linkSertifikat!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: const [
+                Icon(Icons.link, size: 16, color: Color(0xFFEA8000)),
+                SizedBox(width: 8),
+                Text(
+                  'Lihat Sertifikat',
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFFEA8000),
+                      fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           const Divider(height: 1, color: Color(0xFFEDE3D5)),
           const SizedBox(height: 16),
@@ -266,22 +335,26 @@ class _AchievementCard extends StatelessWidget {
     );
   }
 
-  Widget _statusBadge(AchievementStatus status) {
+  Widget _statusBadge(String status) {
     late Color bg;
     late Color fg;
     late String label;
 
-    switch (status) {
-      case AchievementStatus.pending:
-        bg = const Color(0xFFFBE6A8);
-        fg = const Color(0xFF7A5C12);
-        label = 'Pending';
+    switch (status.toLowerCase()) {
+      case 'approved':
+        bg = const Color(0xFFC8E6C9);
+        fg = const Color(0xFF1B5E20);
+        label = 'Approved';
         break;
-      case AchievementStatus.rejected:
+      case 'rejected':
         bg = const Color(0xFFF3C0C0);
         fg = const Color(0xFF7A1F1F);
         label = 'Rejected';
         break;
+      default:
+        bg = const Color(0xFFFBE6A8);
+        fg = const Color(0xFF7A5C12);
+        label = 'Pending';
     }
 
     return Container(

@@ -1,5 +1,13 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart';
+import '../config/api_config.dart';
+import '../models/post.dart';
+import '../services/api_client.dart';
+import '../services/post_service.dart';
+import '../services/session.dart';
 import '../widgets/bottom_navbar.dart';
 
 class TimelineScreen extends StatefulWidget {
@@ -10,269 +18,53 @@ class TimelineScreen extends StatefulWidget {
 }
 
 class _TimelineScreenState extends State<TimelineScreen> {
-  final String _firstName = 'Arrijal Julfa';
-  final String _lastName = 'Arrasyid';
-
-  String get _initials {
-    final fi = _firstName.isNotEmpty ? _firstName[0] : '';
-    final li = _lastName.isNotEmpty ? _lastName[0] : '';
-    return '$fi$li'.toUpperCase();
-  }
-
   final ScrollController _scrollController = ScrollController();
-  bool _isLoadingMore = false;
-  int _displayedCount = 5;
-  static const int _loadBatchSize = 5;
-
-  final Map<int, bool> _expanded = {};
-  String? _selectedPostType;
   final TextEditingController _postController = TextEditingController();
+  final Map<int, TextEditingController> _commentCtrls = {};
 
-  // Pool 15 dummy posts
-  final List<Map<String, dynamic>> _allPosts = [
-    {
-      'name': 'Fahmi Irawan',
-      'role': 'Data Sains',
-      'timeAgo': '2h ago',
-      'text':
-          '[Road to GEMASTIK XVII: Progress Update] Our team just finalized the UI/UX prototype for the competition. Focus for next week: Backend integration and API documentation. Keep pushing!',
-      'hasMedia': true,
-      'likesCount': 24,
-      'commentsCount': 3,
-      'isLiked': false,
-      'type': 'Event',
-    },
-    {
-      'name': 'Siti Aminah',
-      'role': 'Informatika',
-      'timeAgo': '5h ago',
-      'text':
-          'Alhamdulillah, proposal PKM-KC kami lolos tahap pendanaan! Terima kasih atas dukungan teman-teman semua. Semangat buat tim PKM lainnya! #PKM2024 #InovasiMahasiswa',
-      'hasMedia': false,
-      'likesCount': 5,
-      'commentsCount': 2,
-      'isLiked': false,
-      'type': 'Achievement',
-    },
-    {
-      'name': 'Budi Santoso',
-      'role': 'Sistem Informasi',
-      'timeAgo': '1d ago',
-      'text':
-          'Baru saja menyelesaikan sertifikasi Google Cloud Professional! Proses belajarnya cukup menantang tapi worth it. Semangat untuk teman-teman yang sedang mempersiapkan sertifikasi juga!',
-      'hasMedia': false,
-      'likesCount': 41,
-      'commentsCount': 8,
-      'isLiked': false,
-      'type': 'Achievement',
-    },
-    {
-      'name': 'Rini Kartika',
-      'role': 'Manajemen',
-      'timeAgo': '1d ago',
-      'text':
-          'Workshop Leadership & Communication Skills DTC hari ini luar biasa! Banyak insight baru yang bisa langsung diaplikasikan. Terima kasih para pembicara yang sudah berbagi pengalaman. See you next event!',
-      'hasMedia': true,
-      'likesCount': 18,
-      'commentsCount': 5,
-      'isLiked': false,
-      'type': 'Event',
-    },
-    {
-      'name': 'Dimas Pratama',
-      'role': 'Teknik Elektro',
-      'timeAgo': '2d ago',
-      'text':
-          'Open source project kami — IoT Smart Campus Monitoring — akhirnya mencapai 100 GitHub stars! Terima kasih untuk semua kontributor. Masih banyak fitur yang akan kami kembangkan.',
-      'hasMedia': false,
-      'likesCount': 67,
-      'commentsCount': 12,
-      'isLiked': false,
-      'type': null,
-    },
-    {
-      'name': 'Nadia Putri',
-      'role': 'Psikologi',
-      'timeAgo': '2d ago',
-      'text':
-          'Mental health matters! Jangan lupa istirahat di tengah padatnya tugas dan kegiatan. Kalau butuh ngobrol, DM aku ya. Kita semua butuh support system yang kuat 💛',
-      'hasMedia': false,
-      'likesCount': 93,
-      'commentsCount': 21,
-      'isLiked': false,
-      'type': null,
-    },
-    {
-      'name': 'Hendra Wijaya',
-      'role': 'Teknik Informatika',
-      'timeAgo': '3d ago',
-      'text':
-          'Excited banget! Tim kami berhasil masuk finalis Hackathon Nasional 2024. Babak final minggu depan di Jakarta. Doakan ya! 🚀 #Hackathon2024 #TechForIndonesia',
-      'hasMedia': true,
-      'likesCount': 112,
-      'commentsCount': 34,
-      'isLiked': false,
-      'type': 'Achievement',
-    },
-    {
-      'name': 'Ayu Lestari',
-      'role': 'Desain Komunikasi Visual',
-      'timeAgo': '3d ago',
-      'text':
-          'Sharing portofolio terbaru — UI/UX redesign untuk aplikasi e-learning kampus. Proses riset user-nya sangat membantu dalam menghasilkan desain yang lebih intuitif. Feedback welcome!',
-      'hasMedia': true,
-      'likesCount': 56,
-      'commentsCount': 14,
-      'isLiked': false,
-      'type': 'Article',
-    },
-    {
-      'name': 'Rizky Maulana',
-      'role': 'Akuntansi',
-      'timeAgo': '4d ago',
-      'text':
-          'Tips lolos seleksi magang Big Four: 1) Persiapkan CV yang ATS-friendly, 2) Latihan case study sejak jauh-jauh hari, 3) Bangun relasi di LinkedIn, 4) Jangan menyerah di penolakan pertama. You got this!',
-      'hasMedia': false,
-      'likesCount': 204,
-      'commentsCount': 47,
-      'isLiked': false,
-      'type': 'Article',
-    },
-    {
-      'name': 'Mega Silviana',
-      'role': 'Biologi',
-      'timeAgo': '4d ago',
-      'text':
-          'Paper penelitian kami tentang biodiversitas mangrove di Teluk Banten akhirnya diterima di jurnal internasional terindeks Scopus! Terima kasih tim dan pembimbing atas kerja keras selama 2 tahun ini.',
-      'hasMedia': false,
-      'likesCount': 89,
-      'commentsCount': 23,
-      'isLiked': false,
-      'type': 'Article',
-    },
-    {
-      'name': 'Fauzan Akbar',
-      'role': 'Hukum',
-      'timeAgo': '5d ago',
-      'text':
-          'Moot Court Competition selesai! Tim kami berhasil meraih juara 2 tingkat nasional. Pengalaman berargumentasi di depan panel hakim berpengalaman sungguh tidak ternilai.',
-      'hasMedia': true,
-      'likesCount': 37,
-      'commentsCount': 9,
-      'isLiked': false,
-      'type': 'Achievement',
-    },
-    {
-      'name': 'Tiara Dewi',
-      'role': 'Komunikasi',
-      'timeAgo': '5d ago',
-      'text':
-          'Just wrapped up our campus documentary project! 6 bulan proses produksi, ratusan jam footage, dan akhirnya jadi sebuah karya yang kami banggakan. Nantikan screeningnya bulan depan!',
-      'hasMedia': true,
-      'likesCount': 76,
-      'commentsCount': 18,
-      'isLiked': false,
-      'type': 'Event',
-    },
-    {
-      'name': 'Arief Nugroho',
-      'role': 'Fisika',
-      'timeAgo': '6d ago',
-      'text':
-          'Riset simulasi komputasi kami untuk optimasi panel surya berhasil menunjukkan peningkatan efisiensi 12% dibanding baseline. Excited untuk tahap implementasi hardware selanjutnya!',
-      'hasMedia': false,
-      'likesCount': 44,
-      'commentsCount': 11,
-      'isLiked': false,
-      'type': 'Article',
-    },
-    {
-      'name': 'Cindy Rahayu',
-      'role': 'Farmasi',
-      'timeAgo': '1w ago',
-      'text':
-          'Praktek lapangan di RSUP selama sebulan memberikan banyak pengalaman berharga. Melihat langsung bagaimana apoteker berperan dalam pelayanan pasien membuat semakin yakin dengan pilihan jurusan ini.',
-      'hasMedia': false,
-      'likesCount': 61,
-      'commentsCount': 15,
-      'isLiked': false,
-      'type': null,
-    },
-    {
-      'name': 'Wahyu Saputra',
-      'role': 'Teknik Sipil',
-      'timeAgo': '1w ago',
-      'text':
-          'Desain jembatan gantung kami untuk desa terpencil di Kalimantan berhasil mendapat pendanaan dari program CSR perusahaan BUMN. Insya Allah konstruksi dimulai bulan depan. Semoga bermanfaat!',
-      'hasMedia': true,
-      'likesCount': 158,
-      'commentsCount': 42,
-      'isLiked': false,
-      'type': 'Event',
-    },
-  ];
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  String? _error;
+  int _page = 1;
+  static const int _perPage = 10;
 
-  List<Map<String, dynamic>> get _visiblePosts =>
-      _allPosts.take(_displayedCount).toList();
+  List<Post> _posts = [];
+  String? _selectedTag; // 'Event' | 'Article'
+  String? _pickedMediaPath; // foto/video terpilih untuk diunggah
+  bool _pickedIsVideo = false;
+  bool _posting = false;
+  final Map<int, bool> _expanded = {};
+
+  static const Map<String, String> _reportReasons = {
+    'inappropriate_content': 'Konten Tidak Pantas',
+    'spam': 'Spam / Iklan Mengganggu',
+    'harassment': 'Pelecehan / Perundungan',
+    'false_information': 'Informasi Palsu / Hoaks',
+    'copyright_violation': 'Pelanggaran Hak Cipta',
+    'other': 'Lainnya',
+  };
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _postController.addListener(() => setState(() {}));
+    _load();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _postController.dispose();
+    for (final c in _commentCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  void _onScroll() {
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-    if (currentScroll >= maxScroll - 150 &&
-        !_isLoadingMore &&
-        _displayedCount < _allPosts.length) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _loadMore() async {
-    setState(() => _isLoadingMore = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
-        _displayedCount =
-            (_displayedCount + _loadBatchSize).clamp(0, _allPosts.length);
-        _isLoadingMore = false;
-      });
-    }
-  }
-
-  void _submitPost() {
-    final text = _postController.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _allPosts.insert(0, {
-        'name': '$_firstName $_lastName',
-        'role': 'Human Capital',
-        'timeAgo': 'Baru saja',
-        'text': text,
-        'hasMedia': false,
-        'likesCount': 0,
-        'commentsCount': 0,
-        'isLiked': false,
-        'type': _selectedPostType,
-      });
-      _displayedCount += 1;
-      _postController.clear();
-      _selectedPostType = null;
-    });
-  }
-
-  void _showSnackBar(String message) {
+  void _snack(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -283,442 +75,206 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  String _getInitialsFromName(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _page = 1;
+      _hasMore = true;
+    });
+    try {
+      final data = await PostService.instance.list(page: 1, perPage: _perPage);
+      if (!mounted) return;
+      setState(() {
+        _posts = data;
+        _hasMore = data.length >= _perPage;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.firstError;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Gagal memuat timeline. Periksa koneksi server.';
+        _loading = false;
+      });
     }
-    return parts[0].isNotEmpty ? parts[0][0].toUpperCase() : '?';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBF6F0),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFFBF6F0),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFFEA8000)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Timeline',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-      ),
-      body: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _visiblePosts.length + 2, // +1 header, +1 footer
-        itemBuilder: (context, index) {
-          if (index == 0) return _buildCreatePostCard();
-          final postIndex = index - 1;
-          if (postIndex < _visiblePosts.length) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: _buildPostCard(postIndex),
-            );
-          }
-          // Footer
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Center(
-              child: _isLoadingMore
-                  ? const SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Color(0xFFEA8000),
-                      ),
-                    )
-                  : _displayedCount >= _allPosts.length
-                      ? const Text(
-                          'Semua postingan telah ditampilkan',
-                          style: TextStyle(fontSize: 13, color: Colors.black38),
-                        )
-                      : const SizedBox.shrink(),
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: BottomNavbar(currentIndex: 1),
-    );
-  }
-
-  Widget _buildCreatePostCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _buildAvatarCircle(_initials, const Color(0xFFEA8000), 40),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _postController,
-                  minLines: 1,
-                  maxLines: 5,
-                  style: const TextStyle(fontSize: 14, color: Colors.black87),
-                  decoration: InputDecoration(
-                    hintText: 'Start a post...',
-                    hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF7F0E8),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xFFEA8000), width: 1),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: Color(0xFFEEEEEE)),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Wrap(
-                  spacing: 0,
-                  children: [
-                    _buildPostActionButton(
-                      Icons.image_outlined,
-                      'Photo',
-                      null,
-                    ),
-                    _buildPostActionButton(
-                      Icons.videocam_outlined,
-                      'Video',
-                      null,
-                    ),
-                    _buildPostActionButton(
-                      Icons.event_outlined,
-                      'Event',
-                      () => setState(() {
-                        _selectedPostType =
-                            _selectedPostType == 'Event' ? null : 'Event';
-                      }),
-                      selected: _selectedPostType == 'Event',
-                    ),
-                    _buildPostActionButton(
-                      Icons.article_outlined,
-                      'Write article',
-                      () => setState(() {
-                        _selectedPostType =
-                            _selectedPostType == 'Article' ? null : 'Article';
-                      }),
-                      selected: _selectedPostType == 'Article',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _postController.text.trim().isNotEmpty ? _submitPost : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _postController.text.trim().isNotEmpty
-                      ? const Color(0xFFEA8000)
-                      : const Color(0xFFE0E0E0),
-                  foregroundColor: _postController.text.trim().isNotEmpty
-                      ? Colors.white
-                      : Colors.black45,
-                  disabledBackgroundColor: const Color(0xFFE0E0E0),
-                  disabledForegroundColor: Colors.black45,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Post',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostActionButton(
-    IconData icon,
-    String label,
-    VoidCallback? onTap, {
-    bool selected = false,
-  }) {
-    final color = selected ? const Color(0xFFEA8000) : Colors.black54;
-    return TextButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18, color: color),
-      label: Text(label, style: TextStyle(fontSize: 13, color: color)),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        backgroundColor: selected ? const Color(0xFFFFF3E0) : null,
-        shape: selected
-            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildPostCard(int index) {
-    final post = _visiblePosts[index];
-    final isLiked = post['isLiked'] as bool;
-    final isExpanded = _expanded[index] == true;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: avatar + nama + badge + more icon + role + waktu
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 4, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _buildAvatarCircle(
-                  _getInitialsFromName(post['name'] as String),
-                  const Color(0xFFBDBDBD),
-                  42,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            post['name'] as String,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          if (post['type'] != null) ...[
-                            const SizedBox(width: 6),
-                            _buildTypeBadge(post['type'] as String),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${post['role']} • ${post['timeAgo']}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.more_horiz, color: Colors.black45, size: 20),
-                  onPressed: () => _showMoreOptions(context),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-          ),
-
-          // Post text
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  post['text'] as String,
-                  maxLines: isExpanded ? null : 3,
-                  overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                    height: 1.45,
-                  ),
-                ),
-                if (!isExpanded && _isTextLong(post['text'] as String))
-                  GestureDetector(
-                    onTap: () => setState(() => _expanded[index] = true),
-                    child: const Text(
-                      'more',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFFEA8000),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Media placeholder
-          if (post['hasMedia'] == true)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.zero,
-                  topRight: Radius.zero,
-                ),
-                child: Container(
-                  height: 200,
-                  width: double.infinity,
-                  color: const Color(0xFF1A2B3C),
-                  child: Stack(
-                    children: [
-                      Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF0D1B2A), Color(0xFF1B4F72)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                      ),
-                      Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.image_outlined, size: 40, color: Colors.white54),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Media',
-                              style: TextStyle(color: Colors.white54, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Likes & comments count
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Text(
-              '${post['likesCount']} LIKES • ${post['commentsCount']} COMMENTS',
-              style: const TextStyle(fontSize: 11, color: Colors.black38),
-            ),
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: Divider(height: 1, color: Color(0xFFEEEEEE)),
-          ),
-
-          // Action row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildFeedActionButton(
-                  isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                  'Like',
-                  isLiked ? const Color(0xFFEA8000) : Colors.black54,
-                  () {
-                    setState(() {
-                      _allPosts[index]['isLiked'] = !isLiked;
-                      _allPosts[index]['likesCount'] =
-                          (post['likesCount'] as int) + (isLiked ? -1 : 1);
-                    });
-                  },
-                ),
-                _buildFeedActionButton(
-                  Icons.chat_bubble_outline,
-                  'Comment',
-                  Colors.black54,
-                  () => _showSnackBar('Fitur komentar akan segera hadir'),
-                ),
-                _buildFeedActionButton(
-                  Icons.share_outlined,
-                  'Share',
-                  Colors.black54,
-                  () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: 'https://dtc.web/post/$index'),
-                    );
-                    _showSnackBar('Link disalin ke clipboard');
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTypeBadge(String type) {
-    Color bg;
-    Color fg;
-    switch (type) {
-      case 'Event':
-        bg = const Color(0xFFE3F2FD);
-        fg = const Color(0xFF1565C0);
-        break;
-      case 'Achievement':
-        bg = const Color(0xFFE8F5E9);
-        fg = const Color(0xFF2E7D32);
-        break;
-      case 'Article':
-      default:
-        bg = const Color(0xFFFFF3CD);
-        fg = const Color(0xFFB8860B);
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_loadingMore &&
+        _hasMore &&
+        !_loading) {
+      _loadMore();
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Text(
-        type,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
-      ),
-    );
   }
 
-  void _showMoreOptions(BuildContext context) {
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    try {
+      final next = await PostService.instance
+          .list(page: _page + 1, perPage: _perPage);
+      if (!mounted) return;
+      setState(() {
+        _page += 1;
+        _posts.addAll(next);
+        _hasMore = next.length >= _perPage;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  Future<void> _pickMedia({required bool isVideo}) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: isVideo ? FileType.video : FileType.image,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (file.path == null) return;
+      if (file.size > 20 * 1024 * 1024) {
+        _snack('Ukuran file melebihi 20MB');
+        return;
+      }
+      setState(() {
+        _pickedMediaPath = file.path;
+        _pickedIsVideo = isVideo;
+        _selectedTag = null; // media & tag eksklusif (seperti web)
+      });
+    } catch (e) {
+      _snack('Gagal memilih media: $e');
+    }
+  }
+
+  void _clearMedia() {
+    setState(() {
+      _pickedMediaPath = null;
+      _pickedIsVideo = false;
+    });
+  }
+
+  Future<void> _submitPost() async {
+    final text = _postController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _posting = true);
+    try {
+      String? imageUrl;
+      if (_pickedMediaPath != null) {
+        imageUrl = await PostService.instance.uploadMedia(_pickedMediaPath!);
+      }
+      final post = await PostService.instance.create(
+        content: text,
+        tag: _selectedTag,
+        imageUrl: imageUrl,
+      );
+      if (!mounted) return;
+      setState(() {
+        _posts.insert(0, post);
+        _postController.clear();
+        _selectedTag = null;
+        _pickedMediaPath = null;
+        _pickedIsVideo = false;
+        _posting = false;
+      });
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+      setState(() => _posting = false);
+    } catch (_) {
+      _snack('Gagal membuat post.');
+      if (mounted) setState(() => _posting = false);
+    }
+  }
+
+  Future<void> _toggleLike(Post post) async {
+    // Optimistik
+    final prevLiked = post.likedByMe;
+    final prevCount = post.likesCount;
+    setState(() {
+      post.likedByMe = !prevLiked;
+      post.likesCount += prevLiked ? -1 : 1;
+    });
+    try {
+      final r = await PostService.instance.toggleLike(post.id);
+      if (!mounted) return;
+      setState(() {
+        post.likedByMe = r.isLiked;
+        post.likesCount = r.likesCount;
+      });
+    } catch (_) {
+      setState(() {
+        post.likedByMe = prevLiked;
+        post.likesCount = prevCount;
+      });
+      _snack('Gagal menyukai post.');
+    }
+  }
+
+  Future<void> _addComment(Post post) async {
+    final ctrl = _commentCtrls[post.id];
+    final text = ctrl?.text.trim() ?? '';
+    if (text.isEmpty) return;
+    try {
+      final comment = await PostService.instance.addComment(post.id, text);
+      if (!mounted) return;
+      setState(() {
+        post.comments = [...post.comments, comment];
+        post.commentsCount += 1;
+        ctrl?.clear();
+      });
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal menambah komentar.');
+    }
+  }
+
+  Future<void> _deletePost(Post post) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Hapus Post'),
+        content: const Text('Yakin ingin menghapus postingan ini?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hapus',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await PostService.instance.deletePost(post.id);
+      if (!mounted) return;
+      setState(() => _posts.removeWhere((p) => p.id == post.id));
+      _snack('Postingan dihapus.');
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal menghapus postingan.');
+    }
+  }
+
+  void _sharePost(Post post) async {
+    await Clipboard.setData(
+        ClipboardData(text: '${ApiConfig.baseUrl}/timeline?post=${post.id}'));
+    _snack('Link disalin ke clipboard');
+  }
+
+  void _showPostMenu(Post post) {
+    final isOwn = post.userId == (Session.instance.user?.id ?? -1);
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -737,9 +293,26 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            _buildSheetOption(Icons.bookmark_outline, 'Simpan Post', ctx),
-            _buildSheetOption(Icons.flag_outlined, 'Laporkan', ctx),
-            _buildSheetOption(Icons.visibility_off_outlined, 'Sembunyikan', ctx),
+            if (isOwn)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Hapus Post',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _deletePost(post);
+                },
+              )
+            else
+              ListTile(
+                leading: const Icon(Icons.flag_outlined,
+                    color: Color(0xFFEA8000)),
+                title: const Text('Laporkan Post'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showReportDialog(post);
+                },
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -747,47 +320,625 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  Widget _buildSheetOption(IconData icon, String label, BuildContext ctx) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.black54),
-      title: Text(label, style: const TextStyle(fontSize: 14)),
-      onTap: () {
-        Navigator.pop(ctx);
-        _showSnackBar('$label (dummy)');
-      },
+  void _showReportDialog(Post post) {
+    String reason = 'inappropriate_content';
+    final descCtrl = TextEditingController();
+    bool submitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.flag_outlined, color: Color(0xFFEA8000), size: 20),
+              SizedBox(width: 8),
+              Text('Laporkan Postingan', style: TextStyle(fontSize: 17)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('ALASAN PELAPORAN',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black45)),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: reason,
+                    isExpanded: true,
+                    items: _reportReasons.entries
+                        .map((e) => DropdownMenuItem(
+                            value: e.key, child: Text(e.value)))
+                        .toList(),
+                    onChanged: (v) => setLocal(() => reason = v!),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('DESKRIPSI (OPSIONAL)',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black45)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: descCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Detail tambahan...',
+                  filled: true,
+                  fillColor: const Color(0xFFF5F5F5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: submitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      setLocal(() => submitting = true);
+                      try {
+                        await PostService.instance.report(
+                          postId: post.id,
+                          reason: reason,
+                          description: descCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _snack('Laporan dikirim, akan ditinjau admin.');
+                      } on ApiException catch (e) {
+                        setLocal(() => submitting = false);
+                        _snack(e.firstError);
+                      } catch (_) {
+                        setLocal(() => submitting = false);
+                        _snack('Gagal mengirim laporan.');
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEA8000),
+                foregroundColor: Colors.white,
+              ),
+              child: submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: Colors.white))
+                  : const Text('Kirim Laporan'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildAvatarCircle(String initials, Color color, double size) {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBF6F0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFBF6F0),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFFEA8000)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Timeline',
+            style: TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 18)),
+      ),
+      body: _buildBody(),
+      bottomNavigationBar: const BottomNavbar(currentIndex: 1),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFFEA8000)));
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off, size: 48, color: Colors.black26),
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Colors.black54)),
+            TextButton(onPressed: _load, child: const Text('Coba lagi')),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: const Color(0xFFEA8000),
+      onRefresh: _load,
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: _posts.length + 2,
+        itemBuilder: (context, index) {
+          if (index == 0) return _buildCreatePostCard();
+          final postIndex = index - 1;
+          if (postIndex < _posts.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: _buildPostCard(_posts[postIndex]),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: _loadingMore
+                  ? const SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.4, color: Color(0xFFEA8000)))
+                  : (!_hasMore && _posts.isNotEmpty)
+                      ? const Text('Semua postingan telah ditampilkan',
+                          style: TextStyle(fontSize: 13, color: Colors.black38))
+                      : (_posts.isEmpty
+                          ? const Text('Belum ada postingan. Jadilah yang pertama!',
+                              style: TextStyle(color: Colors.black45))
+                          : const SizedBox.shrink()),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCreatePostCard() {
+    final me = Session.instance.user;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _avatarCircle(me?.initials ?? '?', '', const Color(0xFFEA8000), 40),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _postController,
+                  minLines: 1,
+                  maxLines: 5,
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  decoration: InputDecoration(
+                    hintText: 'Start a post...',
+                    hintStyle:
+                        const TextStyle(color: Colors.black45, fontSize: 14),
+                    filled: true,
+                    fillColor: const Color(0xFFF7F0E8),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_pickedMediaPath != null) _buildMediaPreview(),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  children: [
+                    _composerBtn(Icons.image_outlined, 'Photo',
+                        () => _pickMedia(isVideo: false),
+                        selected: _pickedMediaPath != null && !_pickedIsVideo),
+                    _composerBtn(Icons.videocam_outlined, 'Video',
+                        () => _pickMedia(isVideo: true),
+                        selected: _pickedMediaPath != null && _pickedIsVideo),
+                    _composerBtn(Icons.event_outlined, 'Event', () {
+                      setState(() {
+                        _selectedTag = _selectedTag == 'Event' ? null : 'Event';
+                        if (_selectedTag != null) _clearMedia();
+                      });
+                    }, selected: _selectedTag == 'Event'),
+                    _composerBtn(Icons.article_outlined, 'Article', () {
+                      setState(() {
+                        _selectedTag =
+                            _selectedTag == 'Article' ? null : 'Article';
+                        if (_selectedTag != null) _clearMedia();
+                      });
+                    }, selected: _selectedTag == 'Article'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: (_postController.text.trim().isEmpty || _posting)
+                    ? null
+                    : _submitPost,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEA8000),
+                  disabledBackgroundColor: const Color(0xFFE0E0E0),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: _posting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Post',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _composerBtn(IconData icon, String label, VoidCallback onTap,
+      {bool selected = false}) {
+    final color = selected ? const Color(0xFFEA8000) : Colors.black54;
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18, color: color),
+      label: Text(label, style: TextStyle(fontSize: 13, color: color)),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        backgroundColor: selected ? const Color(0xFFFFF3E0) : null,
+      ),
+    );
+  }
+
+  Widget _buildMediaPreview() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _pickedIsVideo
+                ? Container(
+                    height: 160,
+                    width: double.infinity,
+                    color: const Color(0xFF1A2B3C),
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.videocam, color: Colors.white70, size: 36),
+                          SizedBox(height: 6),
+                          Text('Video terpilih',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  )
+                : Image.file(
+                    File(_pickedMediaPath!),
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+          ),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: GestureDetector(
+              onTap: _clearMedia,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                    color: Colors.black54, shape: BoxShape.circle),
+                child: const Icon(Icons.close, color: Colors.white, size: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostCard(Post post) {
+    final isExpanded = _expanded[post.id] == true;
+    final isLong = post.content.length > 160;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 4, 0),
+            child: Row(
+              children: [
+                _avatarCircle(post.initials, post.userAvatarUrl,
+                    const Color(0xFFBDBDBD), 42),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(post.userName,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.black87)),
+                          ),
+                          if (post.tag != null) ...[
+                            const SizedBox(width: 6),
+                            _tagBadge(post.tag!),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(post.timeAgo,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.black45)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.more_horiz,
+                      color: Colors.black45, size: 20),
+                  onPressed: () => _showPostMenu(post),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  post.content,
+                  maxLines: isExpanded ? null : 3,
+                  overflow:
+                      isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black87, height: 1.45),
+                ),
+                if (!isExpanded && isLong)
+                  GestureDetector(
+                    onTap: () => setState(() => _expanded[post.id] = true),
+                    child: const Text('more',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFFEA8000),
+                            fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+          ),
+          if (post.imageUrl != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: post.isVideo
+                  ? _FeedVideo(url: post.imageUrl!)
+                  : Image.network(
+                      post.imageUrl!,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: Text(
+              '${post.likesCount} LIKES • ${post.commentsCount} COMMENTS',
+              style: const TextStyle(fontSize: 11, color: Colors.black38),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Divider(height: 1, color: Color(0xFFEEEEEE)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _feedAction(
+                  post.likedByMe ? Icons.thumb_up : Icons.thumb_up_outlined,
+                  'Like',
+                  post.likedByMe ? const Color(0xFFEA8000) : Colors.black54,
+                  () => _toggleLike(post),
+                ),
+                _feedAction(Icons.chat_bubble_outline, 'Comment', Colors.black54,
+                    () => setState(() => post.showComments = !post.showComments)),
+                _feedAction(Icons.share_outlined, 'Share', Colors.black54,
+                    () => _sharePost(post)),
+              ],
+            ),
+          ),
+          if (post.showComments) _buildComments(post),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComments(Post post) {
+    final ctrl = _commentCtrls.putIfAbsent(post.id, () => TextEditingController());
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...post.comments.map((c) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _avatarCircle(c.initials, c.userAvatarUrl,
+                        const Color(0xFFBDBDBD), 28),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F2EC),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(c.userName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12)),
+                                const SizedBox(width: 6),
+                                Text(c.timeAgo,
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.black38)),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(c.content,
+                                style: const TextStyle(
+                                    fontSize: 13, color: Colors.black87)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: ctrl,
+                  decoration: InputDecoration(
+                    hintText: 'Tulis komentar...',
+                    isDense: true,
+                    filled: true,
+                    fillColor: const Color(0xFFF7F0E8),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: (_) => _addComment(post),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send, color: Color(0xFFEA8000)),
+                onPressed: () => _addComment(post),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tagBadge(String tag) {
+    Color bg;
+    Color fg;
+    switch (tag.toLowerCase()) {
+      case 'event':
+        bg = const Color(0xFFE3F2FD);
+        fg = const Color(0xFF1565C0);
+        break;
+      case 'achievement':
+        bg = const Color(0xFFE8F5E9);
+        fg = const Color(0xFF2E7D32);
+        break;
+      default:
+        bg = const Color(0xFFFFF3CD);
+        fg = const Color(0xFFB8860B);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Text(tag,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg)),
+    );
+  }
+
+  Widget _avatarCircle(String initials, String avatarUrl, Color color, double size) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color,
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-        ],
+        image: avatarUrl.isNotEmpty
+            ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover)
+            : null,
       ),
-      child: Center(
-        child: Text(
-          initials,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: size * 0.35,
-          ),
-        ),
-      ),
+      child: avatarUrl.isNotEmpty
+          ? null
+          : Center(
+              child: Text(initials,
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: size * 0.35)),
+            ),
     );
   }
 
-  Widget _buildFeedActionButton(
-    IconData icon,
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) {
+  Widget _feedAction(IconData icon, String label, Color color, VoidCallback onTap) {
     return TextButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18, color: color),
@@ -797,6 +948,101 @@ class _TimelineScreenState extends State<TimelineScreen> {
       ),
     );
   }
+}
 
-  bool _isTextLong(String text) => text.length > 120;
+/// Pemutar video sederhana untuk media post di feed.
+/// Inisialisasi saat tampil, tap untuk play/pause, dengan progress bar.
+class _FeedVideo extends StatefulWidget {
+  final String url;
+  const _FeedVideo({required this.url});
+
+  @override
+  State<_FeedVideo> createState() => _FeedVideoState();
+}
+
+class _FeedVideoState extends State<_FeedVideo> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _controller = c;
+    c.initialize().then((_) {
+      if (mounted) setState(() => _initialized = true);
+    }).catchError((_) {
+      if (mounted) setState(() => _error = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    final c = _controller;
+    if (c == null) return;
+    setState(() {
+      if (c.value.isPlaying) {
+        c.pause();
+      } else {
+        c.play();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error) return const SizedBox.shrink();
+    final c = _controller;
+    if (!_initialized || c == null) {
+      return Container(
+        height: 200,
+        color: const Color(0xFF1A2B3C),
+        child: const Center(
+          child: SizedBox(
+            width: 26,
+            height: 26,
+            child: CircularProgressIndicator(
+                strokeWidth: 2.4, color: Colors.white70),
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: _togglePlay,
+      child: AspectRatio(
+        aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            VideoPlayer(c),
+            if (!c.value.isPlaying)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                    color: Colors.black45, shape: BoxShape.circle),
+                child:
+                    const Icon(Icons.play_arrow, color: Colors.white, size: 32),
+              ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: VideoProgressIndicator(
+                c,
+                allowScrubbing: true,
+                colors: const VideoProgressColors(
+                    playedColor: Color(0xFFEA8000)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

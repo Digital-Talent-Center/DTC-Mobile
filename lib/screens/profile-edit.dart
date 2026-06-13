@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/profile_detail.dart';
+import '../services/profile_service.dart';
+import '../services/auth_service.dart';
+import '../services/api_client.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({Key? key}) : super(key: key);
@@ -8,32 +12,48 @@ class ProfileEditScreen extends StatefulWidget {
 }
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
-  // Form 1 controllers
-  final TextEditingController _nimController = TextEditingController();
-  final TextEditingController _fakultasController = TextEditingController();
-  final TextEditingController _jurusanController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _bioController = TextEditingController();
+  final _nimController = TextEditingController();
+  final _fakultasController = TextEditingController();
+  final _jurusanController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _bioController = TextEditingController();
 
-  // Form 2 controllers
-  final TextEditingController _oldPassController = TextEditingController();
-  final TextEditingController _newPassController = TextEditingController();
-  final TextEditingController _confirmPassController = TextEditingController();
+  final _oldPassController = TextEditingController();
+  final _newPassController = TextEditingController();
+  final _confirmPassController = TextEditingController();
 
-  // Password visibility state
   bool _showOldPass = false;
   bool _showNewPass = false;
   bool _showConfirmPass = false;
 
-  // Dummy user data
-  final String _firstName = 'Arrijal Julfa';
-  final String _lastName = 'Arrasyid';
-  final String _status = 'Human Capital';
+  bool _loading = true;
+  bool _saving = false;
+  ProfileDetail? _profile;
 
-  String get _initials {
-    final fi = _firstName.isNotEmpty ? _firstName[0] : '';
-    final li = _lastName.isNotEmpty ? _lastName[0] : '';
-    return '$fi$li'.toUpperCase();
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final p = await ProfileService.instance.fetch();
+      if (!mounted) return;
+      setState(() {
+        _profile = p;
+        _nimController.text = p.nim ?? '';
+        _fakultasController.text = p.faculty ?? '';
+        _jurusanController.text = p.major ?? '';
+        _phoneController.text = p.phone ?? '';
+        _bioController.text = p.about ?? '';
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showSnackBar('Gagal memuat profil. Periksa koneksi server.');
+    }
   }
 
   @override
@@ -50,6 +70,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   void _showSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -58,6 +79,30 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _saving = true);
+    try {
+      await ProfileService.instance.update(
+        nim: _nimController.text.trim(),
+        faculty: _fakultasController.text.trim(),
+        major: _jurusanController.text.trim(),
+        phone: _phoneController.text.trim(),
+        about: _bioController.text.trim(),
+      );
+      // Segarkan sesi agar nama/identitas terbaru terpakai di layar lain.
+      await AuthService.instance.me();
+      if (!mounted) return;
+      _showSnackBar('Profil berhasil disimpan');
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      _showSnackBar(e.firstError);
+    } catch (_) {
+      _showSnackBar('Gagal menyimpan profil. Periksa koneksi server.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -80,26 +125,31 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              _buildUserHeader(),
-              const SizedBox(height: 16),
-              _buildProfileForm(),
-              const SizedBox(height: 16),
-              _buildPasswordForm(),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFEA8000)))
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    _buildUserHeader(),
+                    const SizedBox(height: 16),
+                    _buildProfileForm(),
+                    const SizedBox(height: 16),
+                    _buildPasswordForm(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
   Widget _buildUserHeader() {
+    final p = _profile;
+    final initials = p?.initials ?? '?';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -120,49 +170,61 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               color: const Color(0xFFEA8000),
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                BoxShadow(
+                    color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
               ],
+              image: (p?.avatarUrl != null)
+                  ? DecorationImage(
+                      image: NetworkImage(p!.avatarUrl!), fit: BoxFit.cover)
+                  : null,
             ),
-            child: Center(
-              child: Text(
-                _initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-            ),
+            child: (p?.avatarUrl != null)
+                ? null
+                : Center(
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$_firstName $_lastName',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3E0),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _status,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  p?.name ?? '',
                   style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFEA8000),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.black87,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    (p?.role.isNotEmpty ?? false)
+                        ? (p!.role[0].toUpperCase() + p.role.substring(1))
+                        : 'Student',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFEA8000),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -186,16 +248,19 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           _buildSectionHeader('INFO PROFIL'),
           const SizedBox(height: 16),
           _buildField('NIM', _nimController, hintText: 'contoh: 21004567'),
-          _buildField('FAKULTAS', _fakultasController, hintText: 'Faculty of Computer Science'),
+          _buildField('FAKULTAS', _fakultasController,
+              hintText: 'Faculty of Computer Science'),
           _buildField('JURUSAN', _jurusanController, hintText: 'S1 Informatika'),
-          _buildField('NO. HP / WHATSAPP', _phoneController, hintText: '+62 8xx xxxx xxxx'),
-          _buildTextArea('ABOUT / BIO', _bioController, hintText: 'Ceritakan sedikit tentang dirimu...'),
+          _buildField('NO. HP / WHATSAPP', _phoneController,
+              hintText: '+62 8xx xxxx xxxx'),
+          _buildTextArea('ABOUT / BIO', _bioController,
+              hintText: 'Ceritakan sedikit tentang dirimu...'),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () => _showSnackBar('Profil berhasil disimpan'),
+                  onPressed: _saving ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEA8000),
                     foregroundColor: Colors.white,
@@ -205,10 +270,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Simpan Perubahan',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2.4, color: Colors.white),
+                        )
+                      : const Text('Simpan Perubahan',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -357,25 +428,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           TextFormField(
             controller: controller,
             style: const TextStyle(fontSize: 14, color: Colors.black87),
-            decoration: InputDecoration(
-              hintText: hintText,
-              hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEA8000)),
-              ),
-            ),
+            decoration: _decoration(hintText),
           ),
         ],
       ),
@@ -407,25 +460,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             maxLines: 4,
             minLines: 3,
             style: const TextStyle(fontSize: 14, color: Colors.black87),
-            decoration: InputDecoration(
-              hintText: hintText,
-              hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEA8000)),
-              ),
-            ),
+            decoration: _decoration(hintText),
           ),
         ],
       ),
@@ -458,35 +493,42 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             controller: controller,
             obscureText: obscure,
             style: const TextStyle(fontSize: 14, color: Colors.black87),
-            decoration: InputDecoration(
-              hintText: hintText,
-              hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: _decoration(hintText).copyWith(
               suffixIcon: IconButton(
                 icon: Icon(
-                  obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  obscure
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                   color: Colors.black45,
                   size: 20,
                 ),
                 onPressed: onToggle,
               ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEA8000)),
-              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  InputDecoration _decoration(String hintText) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFEA8000)),
       ),
     );
   }

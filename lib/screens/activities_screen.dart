@@ -1,31 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/activity.dart';
+import '../services/activity_service.dart';
+import '../services/api_client.dart';
 import '../widgets/bottom_navbar.dart';
-
-enum ActivityType { task, event }
-
-enum ActivityStatus { pending, inProgress, completed, overdue }
-
-class Activity {
-  ActivityType type;
-  ActivityStatus status;
-  String name;
-  String description;
-  String date;
-  String? deadline; // untuk task
-  String? time; // untuk event
-  String? location; // untuk event
-
-  Activity({
-    required this.type,
-    required this.status,
-    required this.name,
-    required this.description,
-    required this.date,
-    this.deadline,
-    this.time,
-    this.location,
-  });
-}
 
 class ActivitiesScreen extends StatefulWidget {
   const ActivitiesScreen({Key? key}) : super(key: key);
@@ -38,64 +15,68 @@ class _ActivitiesScreenState extends State<ActivitiesScreen> {
   int _selectedTab = 0; // 0 = All, 1 = Events, 2 = Tasks
   final int _selectedNavIndex = 0;
 
-  final List<Activity> _activities = [
-    Activity(
-      type: ActivityType.task,
-      status: ActivityStatus.pending,
-      name: 'Task Name',
-      description: 'Task Description',
-      date: 'Minggu, 31 Mei 2026',
-      deadline: 'Senin, 1 Juni 2026',
-    ),
-    Activity(
-      type: ActivityType.task,
-      status: ActivityStatus.inProgress,
-      name: 'Task Name',
-      description: 'Task Description',
-      date: 'Minggu, 31 Mei 2026',
-      deadline: 'Senin, 1 Juni 2026',
-    ),
-    Activity(
-      type: ActivityType.task,
-      status: ActivityStatus.completed,
-      name: 'Task Name',
-      description: 'Task Description',
-      date: 'Minggu, 31 Mei 2026',
-      deadline: 'Senin, 1 Juni 2026',
-    ),
-    Activity(
-      type: ActivityType.event,
-      status: ActivityStatus.pending,
-      name: 'Event Name',
-      description: 'Event Description',
-      date: 'Minggu, 31 Mei 2026',
-      time: '00:00 - 02:00',
-      location: 'TULT',
-    ),
-    Activity(
-      type: ActivityType.event,
-      status: ActivityStatus.overdue,
-      name: 'Event Name',
-      description: 'Event Description',
-      date: 'Minggu, 31 Mei 2026',
-      time: '00:00 - 02:00',
-      location: 'TULT',
-    ),
-  ];
+  bool _loading = true;
+  String? _error;
+  List<Activity> _activities = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await ActivityService.instance.list();
+      if (!mounted) return;
+      setState(() {
+        _activities = data;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.firstError;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Gagal memuat aktivitas. Periksa koneksi server.';
+        _loading = false;
+      });
+    }
+  }
 
   List<Activity> get _filteredActivities {
     switch (_selectedTab) {
       case 1:
-        return _activities.where((a) => a.type == ActivityType.event).toList();
+        return _activities.where((a) => a.isEvent).toList();
       case 2:
-        return _activities.where((a) => a.type == ActivityType.task).toList();
+        return _activities.where((a) => a.isTask).toList();
       default:
         return _activities;
     }
   }
 
-  void _addActivity(Activity activity) {
-    setState(() => _activities.add(activity));
+  Future<void> _changeStatus(Activity a, String status) async {
+    try {
+      await ActivityService.instance.updateStatus(a.id, status);
+      await _load();
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal memperbarui status.');
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _openAddSheet() {
@@ -103,14 +84,17 @@ class _ActivitiesScreenState extends State<ActivitiesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddActivitySheet(onSubmit: _addActivity),
+      builder: (_) => _AddActivitySheet(
+        onCreated: () {
+          Navigator.pop(context);
+          _load();
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final activities = _filteredActivities;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F0),
       appBar: AppBar(
@@ -134,26 +118,7 @@ class _ActivitiesScreenState extends State<ActivitiesScreen> {
           const SizedBox(height: 8),
           _buildTabBar(),
           const SizedBox(height: 16),
-          Expanded(
-            child: activities.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No activities',
-                      style: TextStyle(color: Colors.black45),
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-                    itemCount: activities.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
-                    itemBuilder: (context, index) {
-                      return _ActivityCard(
-                        activity: activities[index],
-                        onAction: () => setState(() {}),
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -165,6 +130,58 @@ class _ActivitiesScreenState extends State<ActivitiesScreen> {
       ),
       bottomNavigationBar: BottomNavbar(
         currentIndex: _selectedNavIndex,
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFEA8000)));
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off, size: 48, color: Colors.black26),
+            const SizedBox(height: 12),
+            Text(_error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.black54)),
+            TextButton(onPressed: _load, child: const Text('Coba lagi')),
+          ],
+        ),
+      );
+    }
+    final activities = _filteredActivities;
+    if (activities.isEmpty) {
+      return RefreshIndicator(
+        color: const Color(0xFFEA8000),
+        onRefresh: _load,
+        child: ListView(
+          children: const [
+            SizedBox(height: 120),
+            Center(
+              child: Text('Belum ada aktivitas.',
+                  style: TextStyle(color: Colors.black45)),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: const Color(0xFFEA8000),
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+        itemCount: activities.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 14),
+        itemBuilder: (context, index) {
+          return _ActivityCard(
+            activity: activities[index],
+            onStatus: _changeStatus,
+          );
+        },
       ),
     );
   }
@@ -249,13 +266,13 @@ class _TabButton extends StatelessWidget {
 
 class _ActivityCard extends StatelessWidget {
   final Activity activity;
-  final VoidCallback onAction;
+  final Future<void> Function(Activity, String) onStatus;
 
-  const _ActivityCard({required this.activity, required this.onAction});
+  const _ActivityCard({required this.activity, required this.onStatus});
 
   @override
   Widget build(BuildContext context) {
-    final isTask = activity.type == ActivityType.task;
+    final isTask = activity.isTask;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -269,42 +286,41 @@ class _ActivityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Badges
           Row(
             children: [
               _typeBadge(isTask),
               const SizedBox(width: 8),
-              _statusBadge(activity.status),
+              _statusBadge(activity.displayStatus),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            activity.name,
+            activity.title,
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 17,
               color: Colors.black87,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            activity.description,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
-          ),
+          if (activity.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              activity.description,
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+          ],
           const SizedBox(height: 14),
-          // Date
-          _infoRow(Icons.calendar_today_outlined, activity.date, Colors.black45,
-              Colors.black54),
-          // Task: deadline | Event: time + location
+          _infoRow(Icons.calendar_today_outlined, activity.dateLabel,
+              Colors.black45, Colors.black54),
           if (isTask && activity.deadline != null) ...[
             const SizedBox(height: 6),
-            _infoRow(Icons.access_time, 'Deadline: ${activity.deadline}',
+            _infoRow(Icons.access_time, 'Deadline: ${activity.deadlineLabel}',
                 const Color(0xFFEA8000), const Color(0xFFEA8000)),
           ],
           if (!isTask) ...[
-            if (activity.time != null) ...[
+            if (activity.timeLabel.isNotEmpty) ...[
               const SizedBox(height: 6),
-              _infoRow(Icons.access_time, activity.time!, Colors.black45,
+              _infoRow(Icons.access_time, activity.timeLabel, Colors.black45,
                   Colors.black54),
             ],
             if (activity.location != null) ...[
@@ -313,7 +329,6 @@ class _ActivityCard extends StatelessWidget {
                   Colors.black45, Colors.black54),
             ],
           ],
-          // Action button
           _actionButton(),
         ],
       ),
@@ -326,10 +341,7 @@ class _ActivityCard extends StatelessWidget {
         Icon(icon, size: 15, color: iconColor),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 13, color: textColor),
-          ),
+          child: Text(text, style: TextStyle(fontSize: 13, color: textColor)),
         ),
       ],
     );
@@ -353,32 +365,37 @@ class _ActivityCard extends StatelessWidget {
     );
   }
 
-  Widget _statusBadge(ActivityStatus status) {
+  Widget _statusBadge(String status) {
     late Color bg;
     late Color fg;
     late String label;
 
     switch (status) {
-      case ActivityStatus.pending:
-        bg = const Color(0xFFBFD4FF);
-        fg = Colors.black87;
-        label = 'Pending';
-        break;
-      case ActivityStatus.inProgress:
+      case 'in_progress':
         bg = const Color(0xFFF5B800);
         fg = Colors.black87;
         label = 'In Progress';
         break;
-      case ActivityStatus.completed:
+      case 'completed':
         bg = const Color(0xFF2E9E3B);
         fg = Colors.white;
         label = 'Completed';
         break;
-      case ActivityStatus.overdue:
+      case 'cancelled':
+        bg = const Color(0xFFB0B0B0);
+        fg = Colors.white;
+        label = 'Cancelled';
+        break;
+      case 'overdue':
         bg = const Color(0xFFE09A9A);
         fg = const Color(0xFF7A1F1F);
         label = 'Overdue';
         break;
+      case 'pending':
+      default:
+        bg = const Color(0xFFBFD4FF);
+        fg = Colors.black87;
+        label = 'Pending';
     }
 
     return Container(
@@ -389,45 +406,35 @@ class _ActivityCard extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg),
       ),
     );
   }
 
   Widget _actionButton() {
-    // Tentukan tombol berdasarkan tipe + status
+    // Tombol berdasarkan tipe + status MENTAH (bukan displayStatus),
+    // overdue tidak punya aksi.
     String? label;
     Color? color;
-    VoidCallback? onPressed;
+    String? targetStatus;
 
-    if (activity.type == ActivityType.task) {
-      if (activity.status == ActivityStatus.pending) {
+    final raw = activity.status.toLowerCase();
+
+    if (activity.isTask) {
+      if (raw == 'pending') {
         label = 'Start';
         color = const Color(0xFFEA8000);
-        onPressed = () {
-          activity.status = ActivityStatus.inProgress;
-          onAction();
-        };
-      } else if (activity.status == ActivityStatus.inProgress) {
+        targetStatus = 'in_progress';
+      } else if (raw == 'in_progress') {
         label = 'Complete';
         color = const Color(0xFF2E9E3B);
-        onPressed = () {
-          activity.status = ActivityStatus.completed;
-          onAction();
-        };
+        targetStatus = 'completed';
       }
     } else {
-      if (activity.status == ActivityStatus.pending) {
+      if (raw == 'pending') {
         label = 'Cancel';
         color = const Color(0xFFC62828);
-        onPressed = () {
-          activity.status = ActivityStatus.overdue;
-          onAction();
-        };
+        targetStatus = 'cancelled'; // FIX: sebelumnya keliru jadi 'overdue'
       }
     }
 
@@ -438,20 +445,16 @@ class _ActivityCard extends StatelessWidget {
       child: Align(
         alignment: Alignment.centerRight,
         child: ElevatedButton(
-          onPressed: onPressed,
+          onPressed: () => onStatus(activity, targetStatus!),
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
             foregroundColor: Colors.white,
             elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           ),
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          child: Text(label,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         ),
       ),
     );
@@ -459,61 +462,106 @@ class _ActivityCard extends StatelessWidget {
 }
 
 class _AddActivitySheet extends StatefulWidget {
-  final ValueChanged<Activity> onSubmit;
+  final VoidCallback onCreated;
 
-  const _AddActivitySheet({required this.onSubmit});
+  const _AddActivitySheet({required this.onCreated});
 
   @override
   State<_AddActivitySheet> createState() => _AddActivitySheetState();
 }
 
 class _AddActivitySheetState extends State<_AddActivitySheet> {
-  ActivityType _type = ActivityType.task;
+  String _type = 'task'; // 'task' | 'event'
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _dateCtrl = TextEditingController();
-  final _deadlineCtrl = TextEditingController();
-  final _timeCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
+
+  DateTime? _date; // event: tanggal acara | task: deadline
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  bool _saving = false;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
-    _dateCtrl.dispose();
-    _deadlineCtrl.dispose();
-    _timeCtrl.dispose();
     _locationCtrl.dispose();
     super.dispose();
   }
 
-  void _submit() {
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmtTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(2015),
+      lastDate: DateTime(2035),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final picked =
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startTime = picked;
+        } else {
+          _endTime = picked;
+        }
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    final isTask = _type == 'task';
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama activity wajib diisi')),
-      );
+      _snack('Nama activity wajib diisi');
+      return;
+    }
+    if (_date == null) {
+      _snack(isTask ? 'Deadline wajib diisi' : 'Tanggal acara wajib diisi');
       return;
     }
 
-    final isTask = _type == ActivityType.task;
-    widget.onSubmit(
-      Activity(
+    setState(() => _saving = true);
+    try {
+      await ActivityService.instance.create(
         type: _type,
-        status: ActivityStatus.pending,
-        name: _nameCtrl.text.trim(),
+        title: _nameCtrl.text.trim(),
         description: _descCtrl.text.trim(),
-        date: _dateCtrl.text.trim().isEmpty ? '-' : _dateCtrl.text.trim(),
-        deadline: isTask ? _deadlineCtrl.text.trim() : null,
-        time: isTask ? null : _timeCtrl.text.trim(),
-        location: isTask ? null : _locationCtrl.text.trim(),
-      ),
-    );
-    Navigator.pop(context);
+        // Untuk task, activity_date = deadline (mengikuti perilaku web).
+        activityDate: _fmtDate(_date!),
+        deadline: isTask ? _fmtDate(_date!) : null,
+        startTime: !isTask && _startTime != null ? _fmtTime(_startTime!) : null,
+        endTime: !isTask && _endTime != null ? _fmtTime(_endTime!) : null,
+        location: !isTask ? _locationCtrl.text.trim() : null,
+      );
+      if (!mounted) return;
+      widget.onCreated();
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal menyimpan aktivitas. Periksa koneksi server.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isTask = _type == ActivityType.task;
+    final isTask = _type == 'task';
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -540,34 +588,54 @@ class _AddActivitySheetState extends State<_AddActivitySheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Add Activity',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
+              const Text('Add Activity',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 16),
-              // Type selector
               Row(
                 children: [
-                  _typeOption('Task', ActivityType.task),
+                  _typeOption('Task', 'task'),
                   const SizedBox(width: 10),
-                  _typeOption('Event', ActivityType.event),
+                  _typeOption('Event', 'event'),
                 ],
               ),
               const SizedBox(height: 16),
               _field('Name', _nameCtrl),
               _field('Description', _descCtrl),
-              _field('Date (cth: Minggu, 31 Mei 2026)', _dateCtrl),
-              if (isTask)
-                _field('Deadline (cth: Senin, 1 Juni 2026)', _deadlineCtrl)
-              else ...[
-                _field('Time (cth: 00:00 - 02:00)', _timeCtrl),
+              _pickerTile(
+                isTask ? 'Deadline' : 'Tanggal',
+                _date != null ? _fmtDate(_date!) : 'Pilih tanggal',
+                Icons.calendar_today_outlined,
+                _pickDate,
+              ),
+              if (!isTask) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _pickerTile(
+                        'Start',
+                        _startTime != null ? _fmtTime(_startTime!) : '--:--',
+                        Icons.access_time,
+                        () => _pickTime(isStart: true),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _pickerTile(
+                        'End',
+                        _endTime != null ? _fmtTime(_endTime!) : '--:--',
+                        Icons.access_time,
+                        () => _pickTime(isStart: false),
+                      ),
+                    ),
+                  ],
+                ),
                 _field('Location (cth: TULT)', _locationCtrl),
               ],
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submit,
+                  onPressed: _saving ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEA8000),
                     foregroundColor: Colors.white,
@@ -577,10 +645,16 @@ class _AddActivitySheetState extends State<_AddActivitySheet> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Save Activity',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2.4, color: Colors.white),
+                        )
+                      : const Text('Save Activity',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
                 ),
               ),
             ],
@@ -590,7 +664,7 @@ class _AddActivitySheetState extends State<_AddActivitySheet> {
     );
   }
 
-  Widget _typeOption(String label, ActivityType type) {
+  Widget _typeOption(String label, String type) {
     final selected = _type == type;
     return Expanded(
       child: GestureDetector(
@@ -622,12 +696,41 @@ class _AddActivitySheetState extends State<_AddActivitySheet> {
         decoration: InputDecoration(
           labelText: label,
           isDense: true,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: Color(0xFFEA8000)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pickerTile(
+      String label, String value, IconData icon, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.black26),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: Colors.black45),
+              const SizedBox(width: 10),
+              Text('$label: ',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, color: Colors.black54)),
+              Expanded(
+                child: Text(value,
+                    style: const TextStyle(color: Colors.black87)),
+              ),
+            ],
           ),
         ),
       ),

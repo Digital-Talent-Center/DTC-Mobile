@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'my_achievements_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/achievement_service.dart';
+import '../services/api_client.dart';
+import '../services/session.dart';
 
 class SubmitAchievementScreen extends StatefulWidget {
   const SubmitAchievementScreen({Key? key}) : super(key: key);
@@ -14,11 +18,12 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
   // Controllers
   final _nimCtrl = TextEditingController();
   final _namaCtrl = TextEditingController();
+  final _titleCtrl = TextEditingController(); // Nama Prestasi (terpisah dari Jenis)
   final _jenisCtrl = TextEditingController();
   final _deskripsiCtrl = TextEditingController();
   final _linkCtrl = TextEditingController();
 
-  // Dropdown values
+  // Dropdown values — opsi & nilai DISAMAKAN dengan backend (validasi `in:`).
   String _tahunAjaran = '2023/2024';
   String _kategori = 'Kompetisi Ilmiah';
   String _tingkat = 'Internasional';
@@ -31,44 +36,70 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
   // Upload + agreement
   String? _fileName;
   int? _fileSize; // dalam byte
+  String? _filePath; // path lokal untuk diunggah
   bool _agree = false;
+  bool _submitting = false;
 
-  static const int _maxFileBytes = 2 * 1024 * 1024; // 2MB
+  static const int _maxFileBytes = 2 * 1024 * 1024; // 2MB (sesuai backend)
+  static const _draftKey = 'achievement_draft';
 
+  // Opsi dropdown — identik dengan halaman web submit-achievement.tsx
   final List<String> _tahunOptions = const [
     '2023/2024',
     '2024/2025',
     '2025/2026',
+    '2026/2027',
   ];
   final List<String> _kategoriOptions = const [
     'Kompetisi Ilmiah',
-    'Kompetisi Non-Ilmiah',
-    'Sertifikasi',
-    'Organisasi',
+    'Kompetisi Olahraga',
+    'Kompetisi Seni',
+    'Pengabdian Masyarakat',
+    'Konferensi',
+    'Lainnya',
   ];
+  // Wajib persis: backend memvalidasi in:Internal Kampus,Lokal,Regional,Nasional,Internasional
   final List<String> _tingkatOptions = const [
-    'Internasional',
-    'Nasional',
+    'Internal Kampus',
+    'Lokal',
     'Regional',
-    'Universitas',
+    'Nasional',
+    'Internasional',
   ];
+  // Wajib persis: backend memvalidasi in:Individu,Tim/Kelompok
   final List<String> _keikutsertaanOptions = const [
     'Individu',
-    'Tim',
+    'Tim/Kelompok',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefill NIM & Nama dari profil user aktif (seperti web).
+    final user = Session.instance.user;
+    if (user != null) {
+      _namaCtrl.text = user.name;
+      if (user.profile?.nim != null) _nimCtrl.text = user.profile!.nim!;
+    }
+  }
 
   @override
   void dispose() {
     _nimCtrl.dispose();
     _namaCtrl.dispose();
+    _titleCtrl.dispose();
     _jenisCtrl.dispose();
     _deskripsiCtrl.dispose();
     _linkCtrl.dispose();
     super.dispose();
   }
 
+  // Tampilan tanggal di field (lokal) — yyyy-MM-dd agar jelas.
   String _formatDate(DateTime d) =>
-      '${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}/${d.year}';
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // Format yang dikirim ke API (Y-m-d).
+  String _apiDate(DateTime d) => _formatDate(d);
 
   Future<void> _pickDate({required bool isStart}) async {
     final now = DateTime.now();
@@ -103,21 +134,18 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
 
       if (file.size > _maxFileBytes) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ukuran file melebihi 2MB')),
-        );
+        _snack('Ukuran file melebihi 2MB');
         return;
       }
 
       setState(() {
         _fileName = file.name;
         _fileSize = file.size;
+        _filePath = file.path;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memilih file: $e')),
-      );
+      _snack('Gagal memilih file: $e');
     }
   }
 
@@ -128,39 +156,87 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
     return '${(bytes / 1024).toStringAsFixed(0)} KB';
   }
 
-  void _submit({required bool draft}) {
-    if (!draft) {
-      if (_namaCtrl.text.trim().isEmpty || _jenisCtrl.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nama dan Jenis kegiatan wajib diisi')),
-        );
-        return;
-      }
-      if (!_agree) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Harap centang pernyataan terlebih dahulu')),
-        );
-        return;
-      }
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Simpan draf lokal (TIDAK mengirim ke server / tidak membuat prestasi).
+  Future<void> _saveDraft() async {
+    final draft = {
+      'nim': _nimCtrl.text,
+      'nama': _namaCtrl.text,
+      'title': _titleCtrl.text,
+      'jenis': _jenisCtrl.text,
+      'deskripsi': _deskripsiCtrl.text,
+      'link': _linkCtrl.text,
+      'tahunAjaran': _tahunAjaran,
+      'kategori': _kategori,
+      'tingkat': _tingkat,
+      'keikutsertaan': _keikutsertaan,
+    };
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_draftKey, jsonEncode(draft));
+    _snack('Draf disimpan secara lokal. Anda bisa melanjutkannya nanti.');
+  }
+
+  /// Kirim prestasi ke server (status awal: pending).
+  Future<void> _submit() async {
+    if (_nimCtrl.text.trim().isEmpty || _namaCtrl.text.trim().isEmpty) {
+      _snack('NIM dan Nama Lengkap wajib diisi');
+      return;
+    }
+    if (_tanggalMulai == null || _tanggalSelesai == null) {
+      _snack('Tanggal mulai dan selesai wajib diisi');
+      return;
+    }
+    if (_tanggalSelesai!.isBefore(_tanggalMulai!)) {
+      _snack('Tanggal selesai harus sama atau setelah tanggal mulai');
+      return;
+    }
+    if (_titleCtrl.text.trim().isEmpty || _jenisCtrl.text.trim().isEmpty) {
+      _snack('Nama Prestasi dan Jenis kegiatan wajib diisi');
+      return;
+    }
+    if (_deskripsiCtrl.text.trim().isEmpty) {
+      _snack('Deskripsi prestasi wajib diisi');
+      return;
+    }
+    if (!_agree) {
+      _snack('Harap centang pernyataan terlebih dahulu');
+      return;
     }
 
-    final title = _jenisCtrl.text.trim().isEmpty
-        ? 'Achievement Baru'
-        : _jenisCtrl.text.trim();
-    final dateText = _tanggalMulai != null ? _formatDate(_tanggalMulai!) : '-';
-
-    final achievement = Achievement(
-      title: title,
-      description: _deskripsiCtrl.text.trim(),
-      category: _kategori,
-      date: dateText,
-      status: AchievementStatus.pending,
-    );
-
-    Navigator.pop(context, achievement);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(draft ? 'Draf disimpan' : 'Prestasi dikirim')),
-    );
+    setState(() => _submitting = true);
+    try {
+      await AchievementService.instance.create(
+        nim: _nimCtrl.text.trim(),
+        namaLengkap: _namaCtrl.text.trim(),
+        tahunAjaran: _tahunAjaran,
+        tanggalMulai: _apiDate(_tanggalMulai!),
+        tanggalSelesai: _apiDate(_tanggalSelesai!),
+        title: _titleCtrl.text.trim(),
+        description: _deskripsiCtrl.text.trim(),
+        category: _kategori,
+        jenis: _jenisCtrl.text.trim(),
+        tingkat: _tingkat,
+        keikutsertaan: _keikutsertaan,
+        linkSertifikat: _linkCtrl.text.trim(),
+        buktiPath: _filePath,
+      );
+      // Bersihkan draf bila ada.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+      if (!mounted) return;
+      _snack('Prestasi berhasil dikirim, menunggu verifikasi admin.');
+      Navigator.pop(context, true); // true = berhasil → layar list refresh
+    } on ApiException catch (e) {
+      _snack(e.firstError);
+    } catch (_) {
+      _snack('Gagal mengirim prestasi. Periksa koneksi server.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -251,6 +327,9 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
                   onChanged: (v) => setState(() => _kategori = v!),
                 ),
                 const SizedBox(height: 16),
+                _label('NAMA PRESTASI'),
+                _textField(_titleCtrl, 'contoh: Juara 1 Gemastik'),
+                const SizedBox(height: 16),
                 _label('JENIS'),
                 _textField(_jenisCtrl, 'contoh: Hackathon'),
                 const SizedBox(height: 16),
@@ -310,7 +389,7 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => _submit(draft: false),
+                    onPressed: _submitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF5B800),
                       foregroundColor: Colors.black87,
@@ -320,19 +399,26 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Kirim Prestasi',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.4, color: Colors.black54),
+                          )
+                        : const Text(
+                            'Kirim Prestasi',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Simpan Draf
+                // Simpan Draf (lokal, tidak dikirim ke server)
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => _submit(draft: true),
+                    onPressed: _submitting ? null : _saveDraft,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.black87,
                       side: const BorderSide(color: Color(0xFFE0D4C2)),
@@ -461,7 +547,7 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              date != null ? _formatDate(date) : 'mm/dd/yyyy',
+              date != null ? _formatDate(date) : 'yyyy-mm-dd',
               style: TextStyle(
                 fontSize: 14,
                 color: date != null ? Colors.black87 : Colors.black38,
@@ -523,6 +609,7 @@ class _SubmitAchievementScreenState extends State<SubmitAchievementScreen> {
                           onPressed: () => setState(() {
                             _fileName = null;
                             _fileSize = null;
+                            _filePath = null;
                           }),
                           icon: const Icon(Icons.delete_outline, size: 18),
                           label: const Text('Hapus'),

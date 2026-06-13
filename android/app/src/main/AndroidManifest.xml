@@ -1,8 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Akses internet untuk konsumsi REST API DTC Platform -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="dtc_mobile"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: izinkan HTTP (non-HTTPS) ke server lokal
+             (mis. http://10.0.2.2:8000 saat development di emulator). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -40,6 +45,15 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Agar url_launcher dapat membuka tautan http/https di browser -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
         </intent>
     </queries>
 </manifest>
