@@ -1,8 +1,10 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'services/session.dart';
 import 'services/auth_service.dart';
 import 'services/api_client.dart';
+import 'services/fcm_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 
@@ -10,6 +12,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Inisialisasi data locale Indonesia untuk format tanggal (DateFormat 'id_ID').
   await initializeDateFormatting('id_ID', null);
+  // Inisialisasi Firebase sebelum app tampil.
+  await Firebase.initializeApp();
   // Muat sesi login tersimpan (token Sanctum) sebelum app tampil.
   await Session.instance.load();
   runApp(const MyApp());
@@ -21,6 +25,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: FcmService.navigatorKey,
       title: 'DTC Mobile',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -69,6 +74,7 @@ class _AuthGateState extends State<_AuthGate> {
       final user = await AuthService.instance.me();
       if (user == null) await Session.instance.clear();
       if (!mounted) return;
+      if (user != null) FcmService.instance.initialize();
       setState(() {
         _checking = false;
         _authed = user != null;
@@ -85,6 +91,7 @@ class _AuthGateState extends State<_AuthGate> {
       });
     } catch (_) {
       // Gangguan jaringan → jangan paksa logout, pakai sesi cache.
+      FcmService.instance.initialize();
       if (!mounted) return;
       setState(() {
         _checking = false;

@@ -53,6 +53,13 @@ dependencies:
   # Pemutar video untuk media post di Timeline
   video_player: ^2.9.2
 
+  # Firebase Core & Cloud Messaging untuk push notification
+  firebase_core: ^3.13.0
+  firebase_messaging: ^15.2.7
+
+  # Tampilkan notifikasi lokal saat app di foreground
+  flutter_local_notifications: ^19.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

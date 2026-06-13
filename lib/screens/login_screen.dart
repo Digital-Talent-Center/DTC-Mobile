@@ -4,6 +4,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/fcm_service.dart';
 import 'register_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -43,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await AuthService.instance.login(email: email, password: password);
+      FcmService.instance.registerToken();
       if (!mounted) return;
       Navigator.pushReplacement(
         context,

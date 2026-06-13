@@ -4,6 +4,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/fcm_service.dart';
 import 'dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -69,6 +70,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         faculty: _facultyCtrl.text.trim(),
         studyProgram: _studyProgramCtrl.text.trim(),
       );
+      FcmService.instance.registerToken();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,

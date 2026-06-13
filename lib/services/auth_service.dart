@@ -1,5 +1,6 @@
 import '../models/user.dart';
 import 'api_client.dart';
+import 'fcm_service.dart';
 import 'session.dart';
 
 /// Layanan autentikasi: login, register, logout, ambil profil user aktif.
@@ -51,6 +52,7 @@ class AuthService {
 
   Future<void> logout() async {
     try {
+      await FcmService.instance.deleteTokenFromBackend();
       await _api.post('/auth/logout');
     } catch (_) {
       // Walau gagal di server, sesi lokal tetap dibersihkan.
