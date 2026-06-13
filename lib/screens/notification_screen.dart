@@ -12,7 +12,7 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  final int _selectedNavIndex = 2;
+  final int _selectedNavIndex = 3;
 
   bool _loading = true;
   String? _error;

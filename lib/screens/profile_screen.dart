@@ -21,7 +21,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final int _selectedNavIndex = 3;
+  final int _selectedNavIndex = 4;
 
   bool _loading = true;
   String? _error;
