@@ -74,7 +74,13 @@ class _AuthGateState extends State<_AuthGate> {
       final user = await AuthService.instance.me();
       if (user == null) await Session.instance.clear();
       if (!mounted) return;
-      if (user != null) FcmService.instance.initialize();
+      if (user != null) {
+        // Inisialisasi FCM dan pastikan token tersinkron ke backend
+        // setiap kali app restart dengan sesi aktif.
+        FcmService.instance.initialize().then((_) {
+          FcmService.instance.registerToken();
+        });
+      }
       setState(() {
         _checking = false;
         _authed = user != null;
@@ -91,7 +97,9 @@ class _AuthGateState extends State<_AuthGate> {
       });
     } catch (_) {
       // Gangguan jaringan → jangan paksa logout, pakai sesi cache.
-      FcmService.instance.initialize();
+      FcmService.instance.initialize().then((_) {
+        FcmService.instance.registerToken();
+      });
       if (!mounted) return;
       setState(() {
         _checking = false;

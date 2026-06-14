@@ -190,15 +190,15 @@ class FcmService {
 
   String _titleFromData(Map<String, dynamic> data) {
     switch (data['type']) {
-      case 'POST_LIKED':
+      case 'post_like':
         return 'Postingan kamu disukai';
-      case 'POST_COMMENTED':
+      case 'post_comment':
         return 'Komentar baru';
-      case 'ACHIEVEMENT_APPROVED':
+      case 'achievement_approved':
         return 'Achievement diterima';
-      case 'ACHIEVEMENT_REJECTED':
+      case 'achievement_rejected':
         return 'Achievement ditolak';
-      case 'POST_DELETED_BY_ADMIN':
+      case 'post_deleted':
         return 'Postingan dihapus';
       default:
         return '';
@@ -208,25 +208,27 @@ class FcmService {
   String _bodyFromData(Map<String, dynamic> data) {
     final actorName = data['actor_name'] ?? '';
     switch (data['type']) {
-      case 'POST_LIKED':
+      case 'post_like':
         return actorName.isNotEmpty
-            ? '$actorName menyukai postingan kamu.'
-            : 'Seseorang menyukai postingan kamu.';
-      case 'POST_COMMENTED':
+            ? '$actorName menyukai postingan kamu'
+            : 'Seseorang menyukai postingan kamu';
+      case 'post_comment':
         final preview = data['comment_preview'] ?? '';
         if (actorName.isNotEmpty && preview.isNotEmpty) {
           return '$actorName mengomentari postingan kamu: $preview';
         }
         return actorName.isNotEmpty
-            ? '$actorName mengomentari postingan kamu.'
-            : 'Ada komentar baru di postingan kamu.';
-      case 'ACHIEVEMENT_APPROVED':
-        return 'Achievement kamu berhasil disetujui.';
-      case 'ACHIEVEMENT_REJECTED':
-        return 'Achievement kamu ditolak. Silakan cek alasan penolakan.';
-      case 'POST_DELETED_BY_ADMIN':
-        final reason = data['reason'] ?? 'Melanggar aturan komunitas';
-        return 'Postingan kamu dihapus karena $reason.';
+            ? '$actorName mengomentari postingan kamu'
+            : 'Ada komentar baru di postingan kamu';
+      case 'achievement_approved':
+        return 'Achievement kamu berhasil diverifikasi';
+      case 'achievement_rejected':
+        final reason = data['reason'] ?? '';
+        return reason.isNotEmpty
+            ? 'Achievement kamu belum memenuhi syarat: $reason'
+            : 'Achievement kamu belum memenuhi syarat';
+      case 'post_deleted':
+        return 'Postingan kamu dihapus karena melanggar aturan komunitas';
       default:
         return '';
     }
@@ -269,24 +271,23 @@ class FcmService {
     final type = data['type'] as String? ?? '';
 
     switch (type) {
-      case 'POST_LIKED':
-      case 'POST_COMMENTED':
+      case 'post_like':
+      case 'post_comment':
         // Arahkan ke TimelineScreen agar user bisa melihat postingan.
-        // Tidak ada halaman detail post khusus di project ini.
         nav.push(
           MaterialPageRoute(builder: (_) => const TimelineScreen()),
         );
         break;
 
-      case 'ACHIEVEMENT_APPROVED':
-      case 'ACHIEVEMENT_REJECTED':
+      case 'achievement_approved':
+      case 'achievement_rejected':
         nav.push(
           MaterialPageRoute(builder: (_) => const MyAchievementsScreen()),
         );
         break;
 
-      case 'POST_DELETED_BY_ADMIN':
-        // Postingan sudah dihapus → jangan arahkan ke detail post.
+      case 'post_deleted':
+        // Postingan sudah dihapus → arahkan ke NotificationScreen.
         nav.push(
           MaterialPageRoute(builder: (_) => const NotificationScreen()),
         );
