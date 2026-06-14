@@ -60,6 +60,9 @@ dependencies:
   # Tampilkan notifikasi lokal saat app di foreground
   flutter_local_notifications: ^19.2.1
 
+  # WebView untuk embed Botpress webchat (DTC AI)
+  webview_flutter: ^4.10.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
