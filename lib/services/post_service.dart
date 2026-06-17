@@ -18,6 +18,11 @@ class PostService {
         .toList();
   }
 
+  Future<List<Post>> listByUser(int userId, {int perPage = 5}) async {
+    final res = await _api.get('/posts', query: {'user_id': userId, 'per_page': perPage});
+    return _extractList(res).map((e) => Post.fromJson(e, _uid)).toList();
+  }
+
   Future<Post> create({
     required String content,
     String? tag,

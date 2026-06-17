@@ -544,8 +544,8 @@ class _AddActivitySheetState extends State<_AddActivitySheet> {
         // Untuk task, activity_date = deadline (mengikuti perilaku web).
         activityDate: _fmtDate(_date!),
         deadline: isTask ? _fmtDate(_date!) : null,
-        startTime: !isTask && _startTime != null ? _fmtTime(_startTime!) : null,
-        endTime: !isTask && _endTime != null ? _fmtTime(_endTime!) : null,
+        startTime: _startTime != null ? _fmtTime(_startTime!) : null,
+        endTime: _endTime != null ? _fmtTime(_endTime!) : null,
         location: !isTask ? _locationCtrl.text.trim() : null,
       );
       if (!mounted) return;
@@ -607,30 +607,28 @@ class _AddActivitySheetState extends State<_AddActivitySheet> {
                 Icons.calendar_today_outlined,
                 _pickDate,
               ),
-              if (!isTask) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: _pickerTile(
-                        'Start',
-                        _startTime != null ? _fmtTime(_startTime!) : '--:--',
-                        Icons.access_time,
-                        () => _pickTime(isStart: true),
-                      ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _pickerTile(
+                      'Start',
+                      _startTime != null ? _fmtTime(_startTime!) : '--:--',
+                      Icons.access_time,
+                      () => _pickTime(isStart: true),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _pickerTile(
-                        'End',
-                        _endTime != null ? _fmtTime(_endTime!) : '--:--',
-                        Icons.access_time,
-                        () => _pickTime(isStart: false),
-                      ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _pickerTile(
+                      'End',
+                      _endTime != null ? _fmtTime(_endTime!) : '--:--',
+                      Icons.access_time,
+                      () => _pickTime(isStart: false),
                     ),
-                  ],
-                ),
-                _field('Location (cth: TULT)', _locationCtrl),
-              ],
+                  ),
+                ],
+              ),
+              if (!isTask) _field('Location (cth: TULT)', _locationCtrl),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,

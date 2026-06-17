@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/achievement.dart';
+import '../models/post.dart';
 import '../models/profile_detail.dart';
 import '../services/achievement_service.dart';
+import '../services/post_service.dart';
 import '../services/profile_service.dart';
+import '../services/session.dart';
 import '../widgets/bottom_navbar.dart';
 import 'activities_screen.dart';
 import 'co_guide_screen.dart';
@@ -27,6 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _error;
   ProfileDetail? _profile;
   List<Achievement> _approved = [];
+  List<Post> _recentPosts = [];
 
   @override
   void initState() {
@@ -43,13 +47,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final results = await Future.wait([
         ProfileService.instance.fetch(),
         AchievementService.instance.list(),
+        PostService.instance.listByUser(Session.instance.user?.id ?? 0),
       ]);
       if (!mounted) return;
       final profile = results[0] as ProfileDetail;
       final achievements = results[1] as List<Achievement>;
+      final posts = results[2] as List<Post>;
       setState(() {
         _profile = profile;
         _approved = achievements.where((a) => a.isApproved).take(3).toList();
+        _recentPosts = posts;
         _loading = false;
       });
     } catch (_) {
@@ -127,6 +134,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildAchievementsSection(),
             const SizedBox(height: 24),
             _buildQuickActions(),
+            const SizedBox(height: 24),
+            _buildRecentPosts(),
             const SizedBox(height: 24),
           ],
         ),
@@ -466,6 +475,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               }).toList(),
             ),
+    );
+  }
+
+  Widget _buildRecentPosts() {
+    return _sectionCard(
+      title: 'Recent Posts',
+      child: _recentPosts.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Belum ada postingan.',
+                style: TextStyle(color: Colors.black45),
+              ),
+            )
+          : SizedBox(
+              height: 160,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _recentPosts.length,
+                itemBuilder: (_, i) => _postCard(_recentPosts[i]),
+              ),
+            ),
+    );
+  }
+
+  Widget _postCard(Post post) {
+    final hasImage = post.imageUrl != null && !post.isVideo;
+    return Container(
+      width: 180,
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEDE3D5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasImage)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
+                post.imageUrl!,
+                height: 70,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post.tag != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        post.tag!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFEA8000),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  Expanded(
+                    child: Text(
+                      post.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    post.timeAgo,
+                    style: const TextStyle(fontSize: 10, color: Colors.black45),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
