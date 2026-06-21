@@ -94,6 +94,8 @@ DTC-Mobile/
 - **JDK 17** (mis. Temurin 17). Set `JAVA_HOME` ke folder JDK, atau atur *Gradle JDK* di Android Studio.
 - **Android Emulator** atau perangkat fisik.
 - **Backend DTC-Platform berjalan** (lihat README web). Mobile butuh server API aktif untuk login & data.
+  - **Jika pakai Docker:** jalankan `docker compose up -d` di folder `DTC-Platform`. Server berjalan di port **80**.
+  - **Jika manual:** jalankan `php artisan serve`. Server berjalan di port **8000**.
 
 > Catatan: jangan men-commit `org.gradle.java.home` di `android/gradle.properties` — path JDK bersifat per-perangkat. Biarkan Gradle memakai `JAVA_HOME` masing-masing.
 
@@ -110,9 +112,15 @@ flutter pub get
 File `android/app/google-services.json` sudah ada di repo. Jika membuat project Firebase sendiri, ganti file ini dengan milik Anda.
 
 **3. Pastikan backend berjalan**
-Lihat README `DTC-Platform`. Singkatnya:
+Lihat README `DTC-Platform`. Ada dua cara:
+
 ```bash
-# di folder web DTC-Platform
+# Opsi A — Docker (direkomendasikan, port 80)
+cd ../DTC-Platform
+docker compose up -d
+
+# Opsi B — Manual (tanpa Docker, port 8000)
+cd ../DTC-Platform
 php artisan migrate --seed      # termasuk tabel personal_access_tokens
 php artisan serve               # default http://127.0.0.1:8000
 ```
@@ -122,17 +130,20 @@ php artisan serve               # default http://127.0.0.1:8000
 ## Konfigurasi
 
 ### Base URL API
-Default base URL ada di `lib/config/api_config.dart` = `http://10.0.2.2:8000` (alamat host laptop dari Android Emulator). Bisa dioverride saat run **tanpa mengubah kode**:
+Default base URL ada di `lib/config/api_config.dart` = `http://10.0.2.2:8000` (alamat host laptop dari Android Emulator, mode manual). Bisa dioverride saat run **tanpa mengubah kode**:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000
+# Contoh: HP fisik, backend Docker (port 80)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.10
 ```
 
-| Target | Base URL |
-|--------|----------|
-| Android Emulator | `http://10.0.2.2:8000` (default) |
-| HP fisik (USB/Wi-Fi) | `http://<IP-LAN-laptop>:8000` (HP & laptop satu jaringan; jalankan server dengan `php artisan serve --host=0.0.0.0`) |
-| Chrome / Flutter Web | `http://localhost:8000` (perhatikan CORS di server) |
+| Target | Backend Docker (port 80) | Backend Manual (port 8000) |
+|--------|--------------------------|----------------------------|
+| Android Emulator | `http://10.0.2.2` | `http://10.0.2.2:8000` (default) |
+| HP fisik (USB/Wi-Fi) | `http://<IP-LAN-laptop>` | `http://<IP-LAN-laptop>:8000` |
+| Chrome / Flutter Web | `http://localhost` | `http://localhost:8000` |
+
+> **Catatan Docker:** backend berjalan di port 80 (Nginx), bukan 8000. Tidak perlu menulis `:80` karena itu port default HTTP.
 
 ### Cleartext HTTP
 `android/app/src/main/AndroidManifest.xml` sudah mengaktifkan `android:usesCleartextTraffic="true"` + izin `INTERNET` agar bisa mengakses server `http://` lokal saat development.
@@ -148,6 +159,13 @@ flutter run
 
 Untuk perangkat fisik dengan base URL khusus:
 ```bash
+# Backend Docker (port 80) — Android Emulator
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2
+
+# Backend Docker (port 80) — HP fisik
+flutter run --dart-define=API_BASE_URL=http://IP_LAPTOP
+
+# Backend Manual (port 8000) — HP fisik
 flutter run --dart-define=API_BASE_URL=http://IP_LAPTOP:8000
 ```
 
@@ -198,10 +216,12 @@ Endpoint utama yang dipakai:
 |--------|-------------------|
 | `Gradle property org.gradle.java.home ... is invalid` | `android/gradle.properties` memuat path JDK milik orang lain. Hapus baris `org.gradle.java.home`, set `JAVA_HOME` ke JDK 17 Anda, lalu `flutter clean && flutter run`. |
 | `CSRF token mismatch` saat login | Pastikan request menuju `/api/auth/login` (endpoint mobile). Di server, route `api/auth/*` sudah dikecualikan dari CSRF. |
-| `Connection refused` / timeout | Server belum jalan atau base URL salah. Cek `php artisan serve` dan `API_BASE_URL` (emulator = `10.0.2.2`, HP fisik = IP LAN). |
+| `Connection refused` / timeout | Server belum jalan atau base URL salah. Cek apakah Docker sudah up (`docker compose ps`) atau `php artisan serve` berjalan. Emulator = `10.0.2.2`, HP fisik = IP LAN. |
+| `Connection refused` di Emulator (Docker) | Pastikan `API_BASE_URL=http://10.0.2.2` (tanpa `:8000`). Docker Nginx jalan di port 80. |
+| `Connection refused` di HP fisik (Docker) | Pastikan `API_BASE_URL=http://<IP-LAN-laptop>` (tanpa `:8000`). Periksa firewall Windows tidak memblok port 80. |
 | Profil/identitas menampilkan akun lama | Sesi lama ter-cache. Logout (membersihkan token), atau hapus data app / reinstall. AuthGate juga memverifikasi token ke server saat startup. |
 | Build error setelah menambah plugin | Lakukan **full restart**: stop app, `flutter clean`, `flutter pub get`, `flutter run`. |
-| `Vite manifest not found` (web) | Itu error di **web**, bukan mobile. Jalankan `npm install && npm run build` di proyek web. |
+| `Vite manifest not found` (web) | Itu error di **web**, bukan mobile. Jalankan `npm install && npm run build` di proyek web, atau pastikan `docker compose up -d` sudah berjalan. |
 
 ---
 
