@@ -199,7 +199,8 @@ class FcmService {
       case 'achievement_rejected':
         return 'Achievement ditolak';
       case 'post_deleted':
-        return 'Postingan dihapus';
+      case 'post_deleted_by_admin':
+        return 'Postingan Anda Dihapus';
       default:
         return '';
     }
@@ -229,6 +230,11 @@ class FcmService {
             : 'Achievement kamu belum memenuhi syarat';
       case 'post_deleted':
         return 'Postingan kamu dihapus karena melanggar aturan komunitas';
+      case 'post_deleted_by_admin':
+        final reason2 = data['reason'] ?? '';
+        return reason2.isNotEmpty
+            ? 'Postingan Anda telah dihapus oleh admin karena: ${reason2.toString().replaceAll('_', ' ')}'
+            : 'Postingan Anda telah dihapus oleh admin karena melanggar aturan komunitas DTC Platform.';
       default:
         return '';
     }
@@ -287,6 +293,7 @@ class FcmService {
         break;
 
       case 'post_deleted':
+      case 'post_deleted_by_admin':
         // Postingan sudah dihapus → arahkan ke NotificationScreen.
         nav.push(
           MaterialPageRoute(builder: (_) => const NotificationScreen()),
