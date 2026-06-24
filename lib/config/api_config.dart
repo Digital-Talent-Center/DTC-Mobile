@@ -47,10 +47,25 @@ class ApiConfig {
       '$midtransSnapHost/snap/v4/redirection/$token';
 
   /// Lengkapi path file/storage relatif (mis. "/storage/..") jadi URL absolut.
-  /// Jika sudah absolut (http...) dikembalikan apa adanya.
+  ///
+  /// - Path relatif  -> diawali baseUrl.
+  /// - URL absolut domain publik (Railway, dll) -> diteruskan apa adanya.
+  /// - URL absolut ber-host localhost/127.0.0.1/0.0.0.0 (mis. backend dengan
+  ///   APP_URL lokal) -> di-rewrite ke host baseUrl agar tetap terjangkau dari
+  ///   emulator/HP fisik (localhost di emulator menunjuk ke dirinya sendiri).
   static String fileUrl(String? path) {
     if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      try {
+        final u = Uri.parse(path);
+        if (u.host == 'localhost' || u.host == '127.0.0.1' || u.host == '0.0.0.0') {
+          return Uri.parse(baseUrl)
+              .replace(path: u.path, query: u.hasQuery ? u.query : null)
+              .toString();
+        }
+      } catch (_) {}
+      return path;
+    }
     final p = path.startsWith('/') ? path : '/$path';
     return '$baseUrl$p';
   }
